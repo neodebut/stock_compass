@@ -1,0 +1,13 @@
+INFO:     Started server process [142]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     147.92.179.115:0 - "GET / HTTP/1.1" 200 OK
+INFO:     111.83.90.253:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     111.83.90.253:0 - "GET / HTTP/1.1" 200 OK
+Fetching 2330.TW...
+INFO:     111.83.90.253:0 - "GET /api/stock/2330.TW HTTP/1.1" 200 OK
+INFO:     111.83.90.253:0 - "GET / HTTP/1.1" 200 OK
+Fetching 2330.TW...
+INFO:     111.83.90.253:0 - "GET /api/stock/2330.TW HTTP/1.1" 200 OK
+INFO:     147.92.179.119:0 - "GET / HTTP/1.1" 200 OK
