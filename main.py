@@ -4,10 +4,13 @@ from fastapi.responses import HTMLResponse
 import yfinance as yf
 import pandas as pd
 import json
+import time
 
 app = FastAPI()
 
 # --- Configuration ---
+CACHE = {}
+CACHE_TTL = 3600  # 1 hour cache to strictly limit API hits
 MA_PERIODS = [17, 45, 117, 189, 305, 494]
 MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970']
 
@@ -313,6 +316,13 @@ async def read_root():
 @app.get("/api/stock/{symbol}")
 async def get_stock(symbol: str):
     try:
+        current_time = time.time()
+        if symbol in CACHE:
+            timestamp, data = CACHE[symbol]
+            if current_time - timestamp < CACHE_TTL:
+                print(f"Serving {symbol} from cache")
+                return data
+
         print(f"Fetching {symbol}...")
         ticker = yf.Ticker(symbol)
         df = ticker.history(period="5y")
@@ -341,7 +351,9 @@ async def get_stock(symbol: str):
                 "low": row['low'], "close": row['close']
             })
 
-        return {"symbol": symbol, "candles": candles, "ma": ma_results}
+        response_data = {"symbol": symbol, "candles": candles, "ma": ma_results}
+        CACHE[symbol] = (current_time, response_data)
+        return response_data
 
     except Exception as e:
         print(f"Error: {e}")
