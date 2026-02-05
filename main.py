@@ -5,14 +5,29 @@ import yfinance as yf
 import pandas as pd
 import json
 import time
+import requests_cache
+from requests import Session
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from fake_useragent import UserAgent
 
 app = FastAPI()
 
 # --- Configuration ---
 CACHE = {}
-CACHE_TTL = 3600  # 1 hour cache to strictly limit API hits
+CACHE_TTL = 3600
 MA_PERIODS = [17, 45, 117, 189, 305, 494]
 MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970']
+
+# --- Enhanced Session for yfinance ---
+def get_session():
+    session = requests_cache.CachedSession('yfinance.cache')
+    session.headers['User-Agent'] = UserAgent().random
+    retry = Retry(connect=3, backoff_factor=0.5)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 STOCK_LIST = [
     {"symbol": "2330.TW", "name": "台積電", "market": "TW"},
@@ -324,11 +339,20 @@ async def get_stock(symbol: str):
                 return data
 
         print(f"Fetching {symbol}...")
-        ticker = yf.Ticker(symbol)
+        
+        # Use custom session with fake-useragent
+        session = get_session()
+        ticker = yf.Ticker(symbol, session=session)
         df = ticker.history(period="5y")
         
         if df.empty:
-            raise HTTPException(status_code=404, detail="Stock not found")
+            # Fallback retry without session cache if empty (sometimes cache is bad)
+            print("Empty dataframe, retrying without cache session...")
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period="5y")
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Stock not found or Rate Limited")
 
         df.columns = [c.lower() for c in df.columns]
         
