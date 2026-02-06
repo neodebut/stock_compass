@@ -157,6 +157,7 @@ HTML_TEMPLATE = """
                 const error = ref(null);
                 const chartContainer = ref(null);
                 let chart = null, candleSeries = null, maLines = [];
+                let abortController = null;
 
                 const filteredStocks = computed(() => __STOCK_LIST__.filter(s => s.market === currentMarket.value));
 
@@ -173,9 +174,14 @@ HTML_TEMPLATE = """
                 };
 
                 const loadStockData = async (stock) => {
+                    // Cancel previous request if it exists
+                    if (abortController) abortController.abort();
+                    abortController = new AbortController();
+                    const signal = abortController.signal;
+
                     loading.value = true; error.value = null;
                     try {
-                        const res = await fetch(`/api/stock/${stock.symbol}`);
+                        const res = await fetch(`/api/stock/${stock.symbol}`, { signal });
                         if (!res.ok) throw new Error("API Error");
                         const data = await res.json();
                         
@@ -191,7 +197,16 @@ HTML_TEMPLATE = """
                             }
                         });
                         chart.timeScale().fitContent();
-                    } catch (e) { error.value = e.message; } finally { loading.value = false; }
+                        loading.value = false; // Only clear loading if successful
+                    } catch (e) { 
+                        if (e.name === 'AbortError') {
+                            console.log('Fetch aborted for ' + stock.symbol);
+                            // Do not clear loading or error, let the next request handle it
+                        } else {
+                            error.value = e.message; 
+                            loading.value = false;
+                        }
+                    }
                 };
 
                 const selectStock = (s) => { currentStock.value = s; loadStockData(s); };
