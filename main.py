@@ -4,9 +4,14 @@ from fastapi.responses import HTMLResponse
 import pandas as pd
 import json
 import os
-from datetime import datetime
+import requests
+import random
+import time
+from datetime import datetime, timedelta
+from fake_useragent import UserAgent
 from sqlalchemy import create_engine, Column, String, Float, Integer, Date
 from sqlalchemy.orm import sessionmaker, declarative_base
+from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 
 # --- Configuration ---
@@ -50,6 +55,161 @@ class StockData(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# --- Global Cache ---
+STOCK_DATA_CACHE = {}
+
+# --- Data Fetching Logic (Restored) ---
+def fetch_stooq_data(symbol_info):
+    symbol = symbol_info['symbol']
+    google_symbol = symbol_info['google_symbol']
+    
+    # Map to Stooq format
+    if "TPE:" in google_symbol:
+        stooq_code = google_symbol.split(":")[1] + ".TW"
+    elif "NASDAQ:" in google_symbol:
+        stooq_code = google_symbol.split(":")[1] + ".US"
+    elif "NYSE:" in google_symbol:
+        stooq_code = google_symbol.split(":")[1] + ".US"
+    else:
+        stooq_code = google_symbol
+
+    url = f"https://stooq.com/q/d/l/?s={stooq_code}&i=d"
+    print(f"[{symbol}] Fetching from {url}...")
+    
+    try:
+        headers = {'User-Agent': UserAgent().random}
+        res = requests.get(url, headers=headers, timeout=15)
+        
+        if res.status_code != 200:
+            print(f"[{symbol}] Failed: HTTP {res.status_code}")
+            return None
+            
+        if 'text/html' in res.headers.get('Content-Type', ''):
+            print(f"[{symbol}] Blocked (HTML response)")
+            return None
+
+        from io import StringIO
+        df = pd.read_csv(StringIO(res.text))
+        
+        if df.empty or 'Date' not in df.columns:
+            return None
+            
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.sort_values('Date').tail(1000) 
+        
+        records = []
+        for _, row in df.iterrows():
+            records.append({
+                "symbol": symbol,
+                "date": row['Date'].date(),
+                "open": float(row['Open']),
+                "high": float(row['High']),
+                "low": float(row['Low']),
+                "close": float(row['Close']),
+                "volume": int(row['Volume']) if 'Volume' in row else 0
+            })
+        return records
+
+    except Exception as e:
+        print(f"[{symbol}] Error: {e}")
+        return None
+
+def generate_fake_data(symbol):
+    print(f"[{symbol}] Generating fallback data...")
+    records = []
+    price = 100 + random.randint(-20, 20)
+    base_date = datetime.now() - timedelta(days=365)
+    for i in range(250): 
+        current_date = base_date + timedelta(days=i*1.5)
+        change = random.uniform(-3, 3)
+        price += change
+        records.append({
+            "symbol": symbol,
+            "date": current_date.date(),
+            "open": price,
+            "high": price + random.uniform(0, 2),
+            "low": price - random.uniform(0, 2),
+            "close": price + random.uniform(-1, 1),
+            "volume": random.randint(1000, 50000)
+        })
+    return records
+
+def update_database():
+    print(">>> Starting database update job...")
+    db = SessionLocal()
+    
+    for stock in STOCK_LIST:
+        symbol = stock['symbol']
+        data = fetch_stooq_data(stock)
+        
+        if not data:
+            print(f"[{symbol}] Update failed, keeping old data.")
+            continue
+        
+        # Delete old data
+        db.query(StockData).filter(StockData.symbol == symbol).delete()
+        
+        # Bulk insert
+        objects = [StockData(**d) for d in data]
+        db.bulk_save_objects(objects)
+        db.commit()
+        print(f"[{symbol}] Updated {len(objects)} records.")
+        
+        time.sleep(5) 
+    
+    db.close()
+    print("<<< Database update complete.")
+
+def refresh_cache():
+    """Load all stock data from DB into memory cache"""
+    print(">>> Refreshing memory cache...")
+    db = SessionLocal()
+    try:
+        stocks = db.query(StockData).all()
+        
+        data_by_symbol = {}
+        for row in stocks:
+            if row.symbol not in data_by_symbol:
+                data_by_symbol[row.symbol] = []
+            data_by_symbol[row.symbol].append(row)
+            
+        for symbol, rows in data_by_symbol.items():
+            rows.sort(key=lambda x: x.date)
+            
+            candles = []
+            closes = []
+            dates = []
+            
+            for r in rows:
+                date_str = r.date.strftime('%Y-%m-%d')
+                candles.append({
+                    "time": date_str,
+                    "open": r.open, "high": r.high, "low": r.low, "close": r.close
+                })
+                closes.append(r.close)
+                dates.append(date_str)
+                
+            df = pd.DataFrame({"close": closes, "date": dates})
+            ma_results = []
+            for p in MA_PERIODS:
+                if len(df) >= p:
+                    ma_col = df['close'].rolling(window=p).mean()
+                    ma_data = []
+                    for idx, val in ma_col.items():
+                        if not pd.isna(val):
+                            ma_data.append({"time": df.loc[idx, "date"], "value": val})
+                    ma_results.append(ma_data)
+                else:
+                    ma_results.append([])
+            
+            STOCK_DATA_CACHE[symbol] = {"symbol": symbol, "candles": candles, "ma": ma_results}
+            
+        print(f"<<< Cache refreshed. Loaded {len(STOCK_DATA_CACHE)} symbols.")
+    except Exception as e:
+        print(f"!!! Error refreshing cache: {e}")
+    finally:
+        db.close()
+
 # --- Load seed data from JSON ---
 def load_seed_data():
     """Load pre-fetched data from initial_data.json into database"""
@@ -61,43 +221,52 @@ def load_seed_data():
     print(">>> Loading seed data from initial_data.json...")
     db = SessionLocal()
     
-    with open(seed_file, 'r') as f:
-        all_data = json.load(f)
-    
-    for symbol, records in all_data.items():
-        # Check if already loaded
-        existing = db.query(StockData).filter(StockData.symbol == symbol).count()
-        if existing > 0:
-            print(f"  [{symbol}] Already has {existing} records, skipping")
-            continue
+    try:
+        with open(seed_file, 'r') as f:
+            all_data = json.load(f)
         
-        # Insert records
-        objects = []
-        for r in records:
-            objects.append(StockData(
-                symbol=r['symbol'],
-                date=datetime.strptime(r['date'], '%Y-%m-%d').date(),
-                open=r['open'],
-                high=r['high'],
-                low=r['low'],
-                close=r['close'],
-                volume=r['volume']
-            ))
-        
-        db.bulk_save_objects(objects)
-        db.commit()
-        print(f"  [{symbol}] Loaded {len(objects)} records")
-    
-    db.close()
-    print("<<< Seed data loaded successfully!")
+        for symbol, records in all_data.items():
+            existing = db.query(StockData).filter(StockData.symbol == symbol).count()
+            if existing > 0:
+                print(f"  [{symbol}] Already has {existing} records, skipping")
+                continue
+            
+            objects = []
+            for r in records:
+                objects.append(StockData(
+                    symbol=r['symbol'],
+                    date=datetime.strptime(r['date'], '%Y-%m-%d').date(),
+                    open=r['open'],
+                    high=r['high'],
+                    low=r['low'],
+                    close=r['close'],
+                    volume=r['volume']
+                ))
+            
+            db.bulk_save_objects(objects)
+            db.commit()
+            print(f"  [{symbol}] Loaded {len(objects)} records")
+            
+        print("<<< Seed data loaded successfully!")
+    finally:
+        db.close()
 
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: load seed data
     load_seed_data()
+    refresh_cache()
+    
+    scheduler = BackgroundScheduler()
+    def job():
+        update_database()
+        refresh_cache()
+        
+    scheduler.add_job(job, 'cron', hour=22)
+    scheduler.start()
+    
     yield
-    # Shutdown: nothing to clean up
+    scheduler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -179,7 +348,6 @@ HTML_TEMPLATE = """
                 };
 
                 const loadStockData = async (stock) => {
-                    // Cancel previous request if it exists
                     if (abortController) abortController.abort();
                     abortController = new AbortController();
                     const signal = abortController.signal;
@@ -202,11 +370,10 @@ HTML_TEMPLATE = """
                             }
                         });
                         chart.timeScale().fitContent();
-                        loading.value = false; // Only clear loading if successful
+                        loading.value = false;
                     } catch (e) { 
                         if (e.name === 'AbortError') {
-                            console.log('Fetch aborted for ' + stock.symbol);
-                            // Do not clear loading or error, let the next request handle it
+                            console.log('Fetch aborted');
                         } else {
                             error.value = e.message; 
                             loading.value = false;
@@ -234,6 +401,12 @@ async def read_root():
 
 @app.get("/api/stock/{symbol}")
 def get_stock(symbol: str):
+    # FAST PATH: Read from memory cache
+    if symbol in STOCK_DATA_CACHE:
+        return STOCK_DATA_CACHE[symbol]
+        
+    # Fallback: Query DB
+    print(f"[{symbol}] Cache miss, querying DB...")
     db = SessionLocal()
     try:
         rows = db.query(StockData).filter(StockData.symbol == symbol).order_by(StockData.date).all()
@@ -254,7 +427,6 @@ def get_stock(symbol: str):
             closes.append(r.close)
             dates.append(date_str)
             
-        # Calculate MAs
         df = pd.DataFrame({"close": closes, "date": dates})
         ma_results = []
         for p in MA_PERIODS:
@@ -267,7 +439,9 @@ def get_stock(symbol: str):
                 ma_results.append(ma_data)
             else:
                 ma_results.append([])
-
-        return {"symbol": symbol, "candles": candles, "ma": ma_results}
+        
+        result = {"symbol": symbol, "candles": candles, "ma": ma_results}
+        STOCK_DATA_CACHE[symbol] = result
+        return result
     finally:
         db.close()
