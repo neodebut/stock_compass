@@ -2,3 +2,6 @@ fastapi
 uvicorn
 pandas
 sqlalchemy
+requests
+fake-useragent
+apscheduler
