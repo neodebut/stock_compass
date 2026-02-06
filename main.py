@@ -3,15 +3,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 import pandas as pd
 import json
-import time
-import requests
-import asyncio
-import random
-from datetime import datetime, timedelta
-from fake_useragent import UserAgent
+import os
+from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Float, Integer, Date
 from sqlalchemy.orm import sessionmaker, declarative_base
-from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 
 # --- Configuration ---
@@ -50,132 +45,58 @@ class StockData(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- Data Fetching Logic ---
-def fetch_stooq_data(symbol_info):
-    symbol = symbol_info['symbol']
-    google_symbol = symbol_info['google_symbol']
+# --- Load seed data from JSON ---
+def load_seed_data():
+    """Load pre-fetched data from initial_data.json into database"""
+    seed_file = os.path.join(os.path.dirname(__file__), 'initial_data.json')
+    if not os.path.exists(seed_file):
+        print("No initial_data.json found, skipping seed load")
+        return
     
-    # Map to Stooq format
-    if "TPE:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".TW"
-    elif "NASDAQ:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".US"
-    elif "NYSE:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".US"
-    else:
-        stooq_code = google_symbol
-
-    url = f"https://stooq.com/q/d/l/?s={stooq_code}&i=d"
-    print(f"[{symbol}] Fetching from {url}...")
-    
-    try:
-        headers = {'User-Agent': UserAgent().random}
-        res = requests.get(url, headers=headers, timeout=15)
-        
-        if res.status_code != 200:
-            print(f"[{symbol}] Failed: HTTP {res.status_code}")
-            return None
-            
-        if 'text/html' in res.headers.get('Content-Type', ''):
-            print(f"[{symbol}] Blocked (HTML response)")
-            return None
-
-        from io import StringIO
-        df = pd.read_csv(StringIO(res.text))
-        
-        if df.empty or 'Date' not in df.columns:
-            return None
-            
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').tail(1000) # Keep last ~4 years
-        
-        records = []
-        for _, row in df.iterrows():
-            records.append({
-                "symbol": symbol,
-                "date": row['Date'].date(),
-                "open": float(row['Open']),
-                "high": float(row['High']),
-                "low": float(row['Low']),
-                "close": float(row['Close']),
-                "volume": int(row['Volume']) if 'Volume' in row else 0
-            })
-        return records
-
-    except Exception as e:
-        print(f"[{symbol}] Error: {e}")
-        return None
-
-def generate_fake_data(symbol):
-    print(f"[{symbol}] Generating fallback data...")
-    records = []
-    price = 100 + random.randint(-20, 20)
-    base_date = datetime.now() - timedelta(days=365)
-    for i in range(250): # 1 year trading days approx
-        current_date = base_date + timedelta(days=i*1.5) # approximate weekends
-        change = random.uniform(-3, 3)
-        price += change
-        records.append({
-            "symbol": symbol,
-            "date": current_date.date(),
-            "open": price,
-            "high": price + random.uniform(0, 2),
-            "low": price - random.uniform(0, 2),
-            "close": price + random.uniform(-1, 1),
-            "volume": random.randint(1000, 50000)
-        })
-    return records
-
-def update_database():
-    print(">>> Starting database update job...")
+    print(">>> Loading seed data from initial_data.json...")
     db = SessionLocal()
     
-    for stock in STOCK_LIST:
-        symbol = stock['symbol']
-        data = fetch_stooq_data(stock)
+    with open(seed_file, 'r') as f:
+        all_data = json.load(f)
+    
+    for symbol, records in all_data.items():
+        # Check if already loaded
+        existing = db.query(StockData).filter(StockData.symbol == symbol).count()
+        if existing > 0:
+            print(f"  [{symbol}] Already has {existing} records, skipping")
+            continue
         
-        # If fetch fails, check if DB already has data
-        existing_count = db.query(StockData).filter(StockData.symbol == symbol).count()
+        # Insert records
+        objects = []
+        for r in records:
+            objects.append(StockData(
+                symbol=r['symbol'],
+                date=datetime.strptime(r['date'], '%Y-%m-%d').date(),
+                open=r['open'],
+                high=r['high'],
+                low=r['low'],
+                close=r['close'],
+                volume=r['volume']
+            ))
         
-        if not data and existing_count == 0:
-            # First run and fetch failed -> use FAKE data so app works
-            data = generate_fake_data(symbol)
-        
-        if data:
-            # Delete old data for this symbol (simple overwrite strategy)
-            db.query(StockData).filter(StockData.symbol == symbol).delete()
-            
-            # Bulk insert
-            objects = [StockData(**d) for d in data]
-            db.bulk_save_objects(objects)
-            db.commit()
-            print(f"[{symbol}] Updated {len(objects)} records.")
-        
-        # Sleep to be polite to Stooq
-        time.sleep(5) 
+        db.bulk_save_objects(objects)
+        db.commit()
+        print(f"  [{symbol}] Loaded {len(objects)} records")
     
     db.close()
-    print("<<< Database update complete.")
+    print("<<< Seed data loaded successfully!")
 
-# --- Lifespan & Scheduler ---
+# --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(update_database, 'cron', hour=22) # Run daily at 10PM UTC (early morning Taiwan)
-    scheduler.start()
-    
-    # Run initial data fetch in background immediately
-    asyncio.create_task(asyncio.to_thread(update_database))
-    
+    # Startup: load seed data
+    load_seed_data()
     yield
-    # Shutdown
-    scheduler.shutdown()
+    # Shutdown: nothing to clean up
 
 app = FastAPI(lifespan=lifespan)
 
 # --- Frontend Template ---
-# (Same as before but simplified loading logic)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-TW" class="dark">
@@ -294,15 +215,12 @@ async def read_root():
 @app.get("/api/stock/{symbol}")
 async def get_stock(symbol: str):
     db = SessionLocal()
-    # Query Database ONLY - No external fetch here
     rows = db.query(StockData).filter(StockData.symbol == symbol).order_by(StockData.date).all()
     db.close()
     
     if not rows:
-        # If DB is empty (startup logic hasn't finished yet), return fallback
-        raise HTTPException(status_code=503, detail="System initializing, please wait...")
+        raise HTTPException(status_code=404, detail=f"No data for {symbol}")
 
-    # Format data for frontend
     candles = []
     closes = []
     dates = []
@@ -316,7 +234,7 @@ async def get_stock(symbol: str):
         closes.append(r.close)
         dates.append(date_str)
         
-    # Calculate MAs on the fly (cheap operation)
+    # Calculate MAs
     df = pd.DataFrame({"close": closes, "date": dates})
     ma_results = []
     for p in MA_PERIODS:
