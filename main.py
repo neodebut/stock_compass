@@ -29,6 +29,11 @@ STOCK_LIST = [
 # --- Database Setup (SQLite) ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./stocks.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+
+# Enable Write-Ahead Logging (WAL) for better concurrency
+with engine.connect() as connection:
+    connection.exec_driver_sql("PRAGMA journal_mode=WAL;")
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -228,39 +233,41 @@ async def read_root():
     return content
 
 @app.get("/api/stock/{symbol}")
-async def get_stock(symbol: str):
+def get_stock(symbol: str):
     db = SessionLocal()
-    rows = db.query(StockData).filter(StockData.symbol == symbol).order_by(StockData.date).all()
-    db.close()
-    
-    if not rows:
-        raise HTTPException(status_code=404, detail=f"No data for {symbol}")
-
-    candles = []
-    closes = []
-    dates = []
-    
-    for r in rows:
-        date_str = r.date.strftime('%Y-%m-%d')
-        candles.append({
-            "time": date_str,
-            "open": r.open, "high": r.high, "low": r.low, "close": r.close
-        })
-        closes.append(r.close)
-        dates.append(date_str)
+    try:
+        rows = db.query(StockData).filter(StockData.symbol == symbol).order_by(StockData.date).all()
         
-    # Calculate MAs
-    df = pd.DataFrame({"close": closes, "date": dates})
-    ma_results = []
-    for p in MA_PERIODS:
-        if len(df) >= p:
-            ma_col = df['close'].rolling(window=p).mean()
-            ma_data = []
-            for idx, val in ma_col.items():
-                if not pd.isna(val):
-                    ma_data.append({"time": df.loc[idx, "date"], "value": val})
-            ma_results.append(ma_data)
-        else:
-            ma_results.append([])
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"No data for {symbol}")
 
-    return {"symbol": symbol, "candles": candles, "ma": ma_results}
+        candles = []
+        closes = []
+        dates = []
+        
+        for r in rows:
+            date_str = r.date.strftime('%Y-%m-%d')
+            candles.append({
+                "time": date_str,
+                "open": r.open, "high": r.high, "low": r.low, "close": r.close
+            })
+            closes.append(r.close)
+            dates.append(date_str)
+            
+        # Calculate MAs
+        df = pd.DataFrame({"close": closes, "date": dates})
+        ma_results = []
+        for p in MA_PERIODS:
+            if len(df) >= p:
+                ma_col = df['close'].rolling(window=p).mean()
+                ma_data = []
+                for idx, val in ma_col.items():
+                    if not pd.isna(val):
+                        ma_data.append({"time": df.loc[idx, "date"], "value": val})
+                ma_results.append(ma_data)
+            else:
+                ma_results.append([])
+
+        return {"symbol": symbol, "candles": candles, "ma": ma_results}
+    finally:
+        db.close()
