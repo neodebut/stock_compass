@@ -798,9 +798,14 @@ HTML_TEMPLATE = """
 
                 // Create a debounced version of loadStockData
                 const _debouncedLoad = debounce((s) => {
-                    addLog(`🚀 Executing debounced load for ${s.symbol}`, 'log-success');
-                    loadStockData(s);
-                }, 300); // 增加一點延遲到 300ms
+                    // 確保只執行最後一次請求
+                    if (currentStock.value.symbol === s.symbol) {
+                        addLog(`🚀 Executing debounced load for ${s.symbol}`, 'log-success');
+                        loadStockData(s);
+                    } else {
+                        addLog(`🚫 Skipping stale debounced load for ${s.symbol} (current=${currentStock.value.symbol})`, 'log-warn');
+                    }
+                }, 300);
 
                 const selectStock = (s) => { 
                     addLog(`👆 CLICK: ${s.symbol}`, 'log-success');
