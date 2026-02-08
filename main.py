@@ -787,10 +787,27 @@ HTML_TEMPLATE = """
                     }
                 };
 
+                // Debounce helper
+                const debounce = (fn, delay) => {
+                    let timeout;
+                    return (...args) => {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => fn(...args), delay);
+                    };
+                };
+
+                const loadStockDataDebounced = debounce((s) => loadStockData(s), 200);
+
                 const selectStock = (s) => { 
                     addLog(`👆 CLICK: ${s.symbol}`, 'log-success');
                     currentStock.value = s; 
-                    loadStockData(s); 
+                    // Load immediately if no previous request pending, otherwise debounce
+                    if (!loading.value) {
+                        loadStockData(s);
+                    } else {
+                        addLog(`⏳ Debouncing fetch for ${s.symbol}...`, 'log-warn');
+                        loadStockDataDebounced(s);
+                    }
                 };
 
                 onMounted(() => { 
