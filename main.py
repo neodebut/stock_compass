@@ -370,12 +370,15 @@ HTML_TEMPLATE = """
                             }
                         });
                         chart.timeScale().fitContent();
-                        loading.value = false;
                     } catch (e) { 
                         if (e.name === 'AbortError') {
                             console.log('Fetch aborted');
-                        } else {
-                            error.value = e.message; 
+                            return; // 被中斷的請求不處理後續
+                        }
+                        error.value = e.message;
+                    } finally {
+                        // 確保只有當前請求完成時才關閉 loading
+                        if (!signal.aborted) {
                             loading.value = false;
                         }
                     }
