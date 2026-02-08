@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
 import pandas as pd
 import numpy as np
 import json
@@ -16,6 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 
 # --- Configuration ---
+# Build Timestamp: 2026-02-08 16:19 UTC (Force Rebuild)
 # EMA參數: EMA1~EMA6, EMA799, EMA1292 (依據波浪理論技術分析參數表)
 MA_PERIODS = [17, 45, 117, 189, 305, 494, 799, 1292]
 MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970', '#9B59B6', '#3498DB']
@@ -895,6 +897,6 @@ def query_and_calculate(symbol):
         
         result = {"symbol": symbol, "candles": candles, **indicators}
         STOCK_DATA_CACHE[symbol] = result
-        return result
+        return JSONResponse(content=result)
     finally:
         db.close()
