@@ -796,17 +796,21 @@ HTML_TEMPLATE = """
                     };
                 };
 
-                const loadStockDataDebounced = debounce((s) => loadStockData(s), 200);
+                // Create a debounced version of loadStockData
+                const _debouncedLoad = debounce((s) => {
+                    addLog(`🚀 Executing debounced load for ${s.symbol}`, 'log-success');
+                    loadStockData(s);
+                }, 300); // 增加一點延遲到 300ms
 
                 const selectStock = (s) => { 
                     addLog(`👆 CLICK: ${s.symbol}`, 'log-success');
                     currentStock.value = s; 
-                    // Load immediately if no previous request pending, otherwise debounce
-                    if (!loading.value) {
-                        loadStockData(s);
+                    
+                    if (loading.value) {
+                        addLog(`⏳ Loading busy, debouncing ${s.symbol}...`, 'log-warn');
+                        _debouncedLoad(s);
                     } else {
-                        addLog(`⏳ Debouncing fetch for ${s.symbol}...`, 'log-warn');
-                        loadStockDataDebounced(s);
+                        loadStockData(s);
                     }
                 };
 
