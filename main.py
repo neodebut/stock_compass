@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 import pandas as pd
+import numpy as np
 import json
 import os
 import requests
@@ -18,6 +19,12 @@ from contextlib import asynccontextmanager
 # EMA參數: EMA1~EMA6, EMA799, EMA1292 (依據波浪理論技術分析參數表)
 MA_PERIODS = [17, 45, 117, 189, 305, 494, 799, 1292]
 MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970', '#9B59B6', '#3498DB']
+
+# 技術指標參數（日線）- 依據 PDF 技術分析參數表
+RSI_PERIODS = [17, 44]  # RSI1, RSI2
+KD_PARAMS = {'rsv': 17, 'k': 3, 'd': 3}  # RSV, K, D
+BIAS_PARAMS = {'period': 117, 'av1': 17, 'av2': 45}  # BIAS1, BIASAV1, BIASAV2
+MACD_PARAMS = {'fast': 45, 'slow': 117, 'signal': 17}  # EMA1, EMA2, MACD
 
 STOCK_LIST = [
     {"symbol": "2330", "google_symbol": "TPE:2330", "name": "台積電", "market": "TW"},
@@ -59,6 +66,118 @@ Base.metadata.create_all(bind=engine)
 # --- Global Cache ---
 STOCK_DATA_CACHE = {}
 
+# --- Technical Indicator Calculations ---
+def calc_ema(series, period):
+    """Calculate EMA"""
+    return series.ewm(span=period, adjust=False).mean()
+
+def calc_rsi(closes, period):
+    """Calculate RSI"""
+    delta = closes.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calc_kd(high, low, close, rsv_period, k_period, d_period):
+    """Calculate KD (Stochastic)"""
+    lowest_low = low.rolling(window=rsv_period).min()
+    highest_high = high.rolling(window=rsv_period).max()
+    rsv = 100 * (close - lowest_low) / (highest_high - lowest_low)
+    
+    # K = RSV 的 EMA, D = K 的 EMA
+    k = rsv.ewm(span=k_period, adjust=False).mean()
+    d = k.ewm(span=d_period, adjust=False).mean()
+    return k, d
+
+def calc_bias(closes, period):
+    """Calculate BIAS = (Close - MA) / MA * 100"""
+    ma = closes.rolling(window=period).mean()
+    bias = (closes - ma) / ma * 100
+    return bias
+
+def calc_macd(closes, fast, slow, signal):
+    """Calculate MACD"""
+    ema_fast = calc_ema(closes, fast)
+    ema_slow = calc_ema(closes, slow)
+    dif = ema_fast - ema_slow  # DIF line
+    dea = calc_ema(dif, signal)  # DEA/Signal line
+    macd_hist = (dif - dea) * 2  # MACD Histogram
+    return dif, dea, macd_hist
+
+def calculate_all_indicators(df):
+    """Calculate all technical indicators for a dataframe"""
+    result = {}
+    
+    # MA Lines
+    ma_results = []
+    for p in MA_PERIODS:
+        if len(df) >= p:
+            ma_col = df['close'].rolling(window=p).mean()
+            ma_data = []
+            for idx, val in ma_col.items():
+                if not pd.isna(val):
+                    ma_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+            ma_results.append(ma_data)
+        else:
+            ma_results.append([])
+    result['ma'] = ma_results
+    
+    # RSI
+    rsi_results = []
+    for p in RSI_PERIODS:
+        rsi = calc_rsi(df['close'], p)
+        rsi_data = []
+        for idx, val in rsi.items():
+            if not pd.isna(val):
+                rsi_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+        rsi_results.append(rsi_data)
+    result['rsi'] = rsi_results
+    
+    # KD
+    k, d = calc_kd(df['high'], df['low'], df['close'], 
+                   KD_PARAMS['rsv'], KD_PARAMS['k'], KD_PARAMS['d'])
+    k_data = []
+    d_data = []
+    for idx in df.index:
+        if not pd.isna(k.loc[idx]):
+            k_data.append({"time": df.loc[idx, "date"], "value": float(k.loc[idx])})
+        if not pd.isna(d.loc[idx]):
+            d_data.append({"time": df.loc[idx, "date"], "value": float(d.loc[idx])})
+    result['kd'] = {'k': k_data, 'd': d_data}
+    
+    # BIAS
+    bias = calc_bias(df['close'], BIAS_PARAMS['period'])
+    bias_data = []
+    for idx, val in bias.items():
+        if not pd.isna(val):
+            bias_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+    result['bias'] = bias_data
+    
+    # MACD
+    dif, dea, macd_hist = calc_macd(df['close'], 
+                                     MACD_PARAMS['fast'], MACD_PARAMS['slow'], MACD_PARAMS['signal'])
+    dif_data = []
+    dea_data = []
+    hist_data = []
+    for idx in df.index:
+        time_str = df.loc[idx, "date"]
+        if not pd.isna(dif.loc[idx]):
+            dif_data.append({"time": time_str, "value": float(dif.loc[idx])})
+        if not pd.isna(dea.loc[idx]):
+            dea_data.append({"time": time_str, "value": float(dea.loc[idx])})
+        if not pd.isna(macd_hist.loc[idx]):
+            # Histogram with color based on value
+            hist_data.append({
+                "time": time_str, 
+                "value": float(macd_hist.loc[idx]),
+                "color": '#26A69A' if macd_hist.loc[idx] >= 0 else '#EF5350'
+            })
+    result['macd'] = {'dif': dif_data, 'dea': dea_data, 'histogram': hist_data}
+    
+    return result
+
 # --- Data Fetching Logic (Restored) ---
 def fetch_stooq_data(symbol_info):
     symbol = symbol_info['symbol']
@@ -96,7 +215,7 @@ def fetch_stooq_data(symbol_info):
             return None
             
         df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').tail(1000) 
+        df = df.sort_values('Date').tail(1500)  # Increased for longer MA periods
         
         records = []
         for _, row in df.iterrows():
@@ -184,7 +303,7 @@ def update_database():
     print("<<< Incremental database update complete.")
 
 def refresh_cache():
-    """Load all stock data from DB into memory cache"""
+    """Load all stock data from DB into memory cache with all indicators"""
     print(">>> Refreshing memory cache...")
     db = SessionLocal()
     try:
@@ -200,8 +319,11 @@ def refresh_cache():
             rows.sort(key=lambda x: x.date)
             
             candles = []
-            closes = []
             dates = []
+            opens = []
+            highs = []
+            lows = []
+            closes = []
             
             for r in rows:
                 date_str = r.date.strftime('%Y-%m-%d')
@@ -209,27 +331,34 @@ def refresh_cache():
                     "time": date_str,
                     "open": r.open, "high": r.high, "low": r.low, "close": r.close
                 })
-                closes.append(r.close)
                 dates.append(date_str)
+                opens.append(r.open)
+                highs.append(r.high)
+                lows.append(r.low)
+                closes.append(r.close)
                 
-            df = pd.DataFrame({"close": closes, "date": dates})
-            ma_results = []
-            for p in MA_PERIODS:
-                if len(df) >= p:
-                    ma_col = df['close'].rolling(window=p).mean()
-                    ma_data = []
-                    for idx, val in ma_col.items():
-                        if not pd.isna(val):
-                            ma_data.append({"time": df.loc[idx, "date"], "value": val})
-                    ma_results.append(ma_data)
-                else:
-                    ma_results.append([])
+            df = pd.DataFrame({
+                "date": dates,
+                "open": opens,
+                "high": highs,
+                "low": lows,
+                "close": closes
+            })
             
-            STOCK_DATA_CACHE[symbol] = {"symbol": symbol, "candles": candles, "ma": ma_results}
+            # Calculate all indicators
+            indicators = calculate_all_indicators(df)
+            
+            STOCK_DATA_CACHE[symbol] = {
+                "symbol": symbol, 
+                "candles": candles,
+                **indicators
+            }
             
         print(f"<<< Cache refreshed. Loaded {len(STOCK_DATA_CACHE)} symbols.")
     except Exception as e:
         print(f"!!! Error refreshing cache: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
 
@@ -306,7 +435,7 @@ HTML_TEMPLATE = """
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #1a1a1a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        body { background-color: #1a1a1a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
         .loader { 
             border: 3px solid #333; 
             border-top: 3px solid #3498db; 
@@ -321,6 +450,18 @@ HTML_TEMPLATE = """
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         [v-cloak] { display: none; }
         .stock-item.active { background-color: #2563eb; color: white; }
+        .chart-section { border-top: 1px solid #2a2e39; }
+        .chart-label { 
+            position: absolute; 
+            left: 8px; 
+            top: 4px; 
+            z-index: 10; 
+            font-size: 11px; 
+            color: #888; 
+            background: rgba(19, 23, 34, 0.8);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex">
@@ -338,23 +479,50 @@ HTML_TEMPLATE = """
                 </div>
             </div>
         </div>
-        <!-- Chart -->
-        <div class="flex-1 flex flex-col h-full bg-[#131722] relative">
-            <div class="h-14 bg-[#1e222d] border-b border-[#2a2e39] flex items-center px-4 justify-between">
+        <!-- Chart Area -->
+        <div class="flex-1 flex flex-col h-full bg-[#131722] relative overflow-hidden">
+            <!-- Header -->
+            <div class="h-14 bg-[#1e222d] border-b border-[#2a2e39] flex items-center px-4 justify-between flex-shrink-0">
                 <div class="flex items-center">
                     <button @click="isSidebarOpen = !isSidebarOpen" class="text-gray-400 mr-4"><i class="fas fa-bars"></i></button>
                     <div v-if="currentStock" class="text-lg font-bold text-white">{{ currentStock.symbol }} <span class="text-sm font-normal text-gray-400">{{ currentStock.name }}</span></div>
                 </div>
                 <div v-if="loading" class="loader"></div>
             </div>
-            <div class="flex-1 relative w-full h-full">
-                <div ref="chartContainer" class="absolute inset-0"></div>
-                <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
+            <!-- Charts Container (Scrollable) -->
+            <div class="flex-1 overflow-y-auto" ref="chartsScrollContainer">
+                <!-- Main Candlestick Chart -->
+                <div class="relative" style="height: 55%;">
+                    <span class="chart-label">K線 + MA</span>
+                    <div ref="mainChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- RSI Chart -->
+                <div class="relative chart-section" style="height: 12%;">
+                    <span class="chart-label">RSI (17, 44)</span>
+                    <div ref="rsiChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- KD Chart -->
+                <div class="relative chart-section" style="height: 12%;">
+                    <span class="chart-label">KD (17, 3, 3)</span>
+                    <div ref="kdChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- BIAS Chart -->
+                <div class="relative chart-section" style="height: 10%;">
+                    <span class="chart-label">BIAS (117)</span>
+                    <div ref="biasChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- MACD Chart -->
+                <div class="relative chart-section" style="height: 15%;">
+                    <span class="chart-label">MACD (45, 117, 17)</span>
+                    <div ref="macdChartContainer" class="absolute inset-0"></div>
+                </div>
             </div>
+            <!-- Error Overlay -->
+            <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
         </div>
     </div>
     <script>
-        const { createApp, ref, computed, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
         createApp({
             setup() {
                 const isSidebarOpen = ref(window.innerWidth > 768);
@@ -362,22 +530,97 @@ HTML_TEMPLATE = """
                 const currentStock = ref(__STOCK_LIST__[0]);
                 const loading = ref(false);
                 const error = ref(null);
-                const chartContainer = ref(null);
-                let chart = null, candleSeries = null, maLines = [];
+                
+                // Chart containers
+                const chartsScrollContainer = ref(null);
+                const mainChartContainer = ref(null);
+                const rsiChartContainer = ref(null);
+                const kdChartContainer = ref(null);
+                const biasChartContainer = ref(null);
+                const macdChartContainer = ref(null);
+                
+                // Chart instances
+                let mainChart = null, candleSeries = null, maLines = [];
+                let rsiChart = null, rsiLines = [];
+                let kdChart = null, kLine = null, dLine = null;
+                let biasChart = null, biasLine = null;
+                let macdChart = null, difLine = null, deaLine = null, histSeries = null;
+                
                 let abortController = null;
 
                 const filteredStocks = computed(() => __STOCK_LIST__.filter(s => s.market === currentMarket.value));
 
-                const initChart = () => {
-                    chart = LightweightCharts.createChart(chartContainer.value, {
-                        layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
-                        grid: { vertLines: { color: '#2B2B43' }, horzLines: { color: '#2B2B43' } },
-                        timeScale: { borderColor: '#485c7b', timeVisible: true }
+                const chartOptions = (container) => ({
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
+                    grid: { vertLines: { color: '#2B2B43' }, horzLines: { color: '#2B2B43' } },
+                    timeScale: { borderColor: '#485c7b', timeVisible: true, visible: true },
+                    rightPriceScale: { borderColor: '#485c7b' },
+                    crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+                });
+
+                const initCharts = () => {
+                    // Main chart with candlesticks
+                    mainChart = LightweightCharts.createChart(mainChartContainer.value, chartOptions());
+                    candleSeries = mainChart.addCandlestickSeries();
+                    
+                    // RSI chart
+                    rsiChart = LightweightCharts.createChart(rsiChartContainer.value, {
+                        ...chartOptions(),
+                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } }
                     });
-                    candleSeries = chart.addCandlestickSeries();
-                    new ResizeObserver(e => {
-                         if(e.length) chart.applyOptions({width: e[0].contentRect.width, height: e[0].contentRect.height});
-                    }).observe(chartContainer.value);
+                    
+                    // KD chart
+                    kdChart = LightweightCharts.createChart(kdChartContainer.value, {
+                        ...chartOptions(),
+                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } }
+                    });
+                    
+                    // BIAS chart
+                    biasChart = LightweightCharts.createChart(biasChartContainer.value, {
+                        ...chartOptions(),
+                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } }
+                    });
+                    
+                    // MACD chart
+                    macdChart = LightweightCharts.createChart(macdChartContainer.value, {
+                        ...chartOptions(),
+                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } }
+                    });
+                    
+                    // Sync all charts' time scales
+                    const charts = [mainChart, rsiChart, kdChart, biasChart, macdChart];
+                    charts.forEach(chart => {
+                        chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                            if (range) {
+                                charts.forEach(c => {
+                                    if (c !== chart) {
+                                        c.timeScale().setVisibleLogicalRange(range);
+                                    }
+                                });
+                            }
+                        });
+                    });
+                    
+                    // Resize observer
+                    const resizeObserver = new ResizeObserver(() => {
+                        [
+                            [mainChartContainer, mainChart],
+                            [rsiChartContainer, rsiChart],
+                            [kdChartContainer, kdChart],
+                            [biasChartContainer, biasChart],
+                            [macdChartContainer, macdChart]
+                        ].forEach(([container, chart]) => {
+                            if (container.value && chart) {
+                                chart.applyOptions({ 
+                                    width: container.value.clientWidth, 
+                                    height: container.value.clientHeight 
+                                });
+                            }
+                        });
+                    });
+                    
+                    [mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer]
+                        .forEach(c => { if (c.value) resizeObserver.observe(c.value); });
                 };
 
                 const loadStockData = async (stock) => {
@@ -391,26 +634,64 @@ HTML_TEMPLATE = """
                         if (!res.ok) throw new Error("API Error");
                         const data = await res.json();
                         
+                        // --- Main Chart: Candlesticks + MA ---
                         candleSeries.setData(data.candles);
-                        
-                        maLines.forEach(l => chart.removeSeries(l));
+                        maLines.forEach(l => mainChart.removeSeries(l));
                         maLines = [];
                         data.ma.forEach((m, i) => {
                             if(m.length) {
-                                const l = chart.addLineSeries({ color: __MA_COLORS__[i], lineWidth: 2, lastValueVisible: false });
+                                const l = mainChart.addLineSeries({ color: __MA_COLORS__[i], lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
                                 l.setData(m);
                                 maLines.push(l);
                             }
                         });
-                        chart.timeScale().fitContent();
+                        
+                        // --- RSI Chart ---
+                        rsiLines.forEach(l => rsiChart.removeSeries(l));
+                        rsiLines = [];
+                        const rsiColors = ['#FF6B6B', '#4ECDC4'];
+                        data.rsi.forEach((r, i) => {
+                            if(r.length) {
+                                const l = rsiChart.addLineSeries({ color: rsiColors[i], lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                                l.setData(r);
+                                rsiLines.push(l);
+                            }
+                        });
+                        
+                        // --- KD Chart ---
+                        if (kLine) kdChart.removeSeries(kLine);
+                        if (dLine) kdChart.removeSeries(dLine);
+                        kLine = kdChart.addLineSeries({ color: '#FFEB3B', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                        dLine = kdChart.addLineSeries({ color: '#2196F3', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                        kLine.setData(data.kd.k);
+                        dLine.setData(data.kd.d);
+                        
+                        // --- BIAS Chart ---
+                        if (biasLine) biasChart.removeSeries(biasLine);
+                        biasLine = biasChart.addLineSeries({ color: '#E91E63', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                        biasLine.setData(data.bias);
+                        
+                        // --- MACD Chart ---
+                        if (difLine) macdChart.removeSeries(difLine);
+                        if (deaLine) macdChart.removeSeries(deaLine);
+                        if (histSeries) macdChart.removeSeries(histSeries);
+                        
+                        difLine = macdChart.addLineSeries({ color: '#FFEB3B', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                        deaLine = macdChart.addLineSeries({ color: '#2196F3', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                        histSeries = macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false });
+                        
+                        difLine.setData(data.macd.dif);
+                        deaLine.setData(data.macd.dea);
+                        histSeries.setData(data.macd.histogram);
+                        
+                        mainChart.timeScale().fitContent();
                     } catch (e) { 
                         if (e.name === 'AbortError') {
                             console.log('Fetch aborted');
-                            return; // 被中斷的請求不處理後續
+                            return;
                         }
                         error.value = e.message;
                     } finally {
-                        // 確保只有當前請求完成時才關閉 loading
                         if (!signal.aborted) {
                             loading.value = false;
                         }
@@ -419,9 +700,18 @@ HTML_TEMPLATE = """
 
                 const selectStock = (s) => { currentStock.value = s; loadStockData(s); };
 
-                onMounted(() => { initChart(); selectStock(currentStock.value); });
+                onMounted(() => { 
+                    nextTick(() => {
+                        initCharts(); 
+                        selectStock(currentStock.value); 
+                    });
+                });
 
-                return { isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, chartContainer, loading, error };
+                return { 
+                    isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, 
+                    chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer,
+                    loading, error 
+                };
             }
         }).mount('#app');
     </script>
@@ -441,7 +731,7 @@ def get_stock(symbol: str):
     if symbol in STOCK_DATA_CACHE:
         return STOCK_DATA_CACHE[symbol]
         
-    # Fallback: Query DB
+    # Fallback: Query DB and calculate indicators
     print(f"[{symbol}] Cache miss, querying DB...")
     db = SessionLocal()
     try:
@@ -451,8 +741,11 @@ def get_stock(symbol: str):
             raise HTTPException(status_code=404, detail=f"No data for {symbol}")
 
         candles = []
-        closes = []
         dates = []
+        opens = []
+        highs = []
+        lows = []
+        closes = []
         
         for r in rows:
             date_str = r.date.strftime('%Y-%m-%d')
@@ -460,23 +753,23 @@ def get_stock(symbol: str):
                 "time": date_str,
                 "open": r.open, "high": r.high, "low": r.low, "close": r.close
             })
-            closes.append(r.close)
             dates.append(date_str)
+            opens.append(r.open)
+            highs.append(r.high)
+            lows.append(r.low)
+            closes.append(r.close)
             
-        df = pd.DataFrame({"close": closes, "date": dates})
-        ma_results = []
-        for p in MA_PERIODS:
-            if len(df) >= p:
-                ma_col = df['close'].rolling(window=p).mean()
-                ma_data = []
-                for idx, val in ma_col.items():
-                    if not pd.isna(val):
-                        ma_data.append({"time": df.loc[idx, "date"], "value": val})
-                ma_results.append(ma_data)
-            else:
-                ma_results.append([])
+        df = pd.DataFrame({
+            "date": dates,
+            "open": opens,
+            "high": highs,
+            "low": lows,
+            "close": closes
+        })
         
-        result = {"symbol": symbol, "candles": candles, "ma": ma_results}
+        indicators = calculate_all_indicators(df)
+        
+        result = {"symbol": symbol, "candles": candles, **indicators}
         STOCK_DATA_CACHE[symbol] = result
         return result
     finally:
