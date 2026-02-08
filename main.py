@@ -135,30 +135,52 @@ def generate_fake_data(symbol):
     return records
 
 def update_database():
-    print(">>> Starting database update job...")
+    """增量更新：只新增資料庫中沒有的日期資料，保留所有歷史紀錄"""
+    print(">>> Starting incremental database update job...")
     db = SessionLocal()
     
     for stock in STOCK_LIST:
         symbol = stock['symbol']
+        
+        # 查詢資料庫中該股票最新的日期
+        from sqlalchemy import func
+        latest_record = db.query(func.max(StockData.date)).filter(
+            StockData.symbol == symbol
+        ).scalar()
+        
+        if latest_record:
+            print(f"[{symbol}] Latest date in DB: {latest_record}")
+        else:
+            print(f"[{symbol}] No existing data, will fetch all")
+        
+        # 抓取資料
         data = fetch_stooq_data(stock)
         
         if not data:
-            print(f"[{symbol}] Update failed, keeping old data.")
+            print(f"[{symbol}] Fetch failed, keeping existing data.")
             continue
         
-        # Delete old data
-        db.query(StockData).filter(StockData.symbol == symbol).delete()
+        # 過濾出新資料（日期比資料庫中最新日期還新的）
+        if latest_record:
+            new_data = [d for d in data if d['date'] > latest_record]
+        else:
+            new_data = data
         
-        # Bulk insert
-        objects = [StockData(**d) for d in data]
+        if not new_data:
+            print(f"[{symbol}] Already up-to-date, no new data.")
+            time.sleep(2)
+            continue
+        
+        # 只插入新資料
+        objects = [StockData(**d) for d in new_data]
         db.bulk_save_objects(objects)
         db.commit()
-        print(f"[{symbol}] Updated {len(objects)} records.")
+        print(f"[{symbol}] Added {len(new_data)} new records. (Total fetched: {len(data)})")
         
         time.sleep(5) 
     
     db.close()
-    print("<<< Database update complete.")
+    print("<<< Incremental database update complete.")
 
 def refresh_cache():
     """Load all stock data from DB into memory cache"""
