@@ -23,7 +23,8 @@ MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970', '
 # 技術指標參數（日線）- 依據 PDF 技術分析參數表
 RSI_PERIODS = [17, 44]  # RSI1, RSI2
 KD_PARAMS = {'rsv': 17, 'k': 3, 'd': 3}  # RSV, K, D
-BIAS_PARAMS = {'period': 117, 'av1': 17, 'av2': 45}  # BIAS1, BIASAV1, BIASAV2
+BIAS_PERIODS = [117, 17, 45]  # BIAS1, BIASAV1, BIASAV2 (日線參數)
+BIAS_COLORS = ['#E91E63', '#00BCD4', '#FFEB3B']  # 粉紅、青色、黃色
 MACD_PARAMS = {'fast': 45, 'slow': 117, 'signal': 17}  # EMA1, EMA2, MACD
 
 STOCK_LIST = [
@@ -147,13 +148,16 @@ def calculate_all_indicators(df):
             d_data.append({"time": df.loc[idx, "date"], "value": float(d.loc[idx])})
     result['kd'] = {'k': k_data, 'd': d_data}
     
-    # BIAS
-    bias = calc_bias(df['close'], BIAS_PARAMS['period'])
-    bias_data = []
-    for idx, val in bias.items():
-        if not pd.isna(val):
-            bias_data.append({"time": df.loc[idx, "date"], "value": float(val)})
-    result['bias'] = bias_data
+    # BIAS (三條線: BIAS1=117, BIASAV1=17, BIASAV2=45)
+    bias_results = []
+    for p in BIAS_PERIODS:
+        bias = calc_bias(df['close'], p)
+        bias_data = []
+        for idx, val in bias.items():
+            if not pd.isna(val):
+                bias_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+        bias_results.append(bias_data)
+    result['bias'] = bias_results
     
     # MACD
     dif, dea, macd_hist = calc_macd(df['close'], 
@@ -508,7 +512,7 @@ HTML_TEMPLATE = """
                 </div>
                 <!-- BIAS Chart -->
                 <div class="relative chart-section" style="height: 10%;">
-                    <span class="chart-label">BIAS (117)</span>
+                    <span class="chart-label">BIAS (117, 17, 45)</span>
                     <div ref="biasChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- MACD Chart -->
@@ -543,7 +547,7 @@ HTML_TEMPLATE = """
                 let mainChart = null, candleSeries = null, maLines = [];
                 let rsiChart = null, rsiLines = [];
                 let kdChart = null, kLine = null, dLine = null;
-                let biasChart = null, biasLine = null;
+                let biasChart = null, biasLines = [];
                 let macdChart = null, difLine = null, deaLine = null, histSeries = null;
                 
                 let abortController = null;
@@ -666,10 +670,17 @@ HTML_TEMPLATE = """
                         kLine.setData(data.kd.k);
                         dLine.setData(data.kd.d);
                         
-                        // --- BIAS Chart ---
-                        if (biasLine) biasChart.removeSeries(biasLine);
-                        biasLine = biasChart.addLineSeries({ color: '#E91E63', lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
-                        biasLine.setData(data.bias);
+                        // --- BIAS Chart (三條線: BIAS1=117, BIASAV1=17, BIASAV2=45) ---
+                        biasLines.forEach(l => biasChart.removeSeries(l));
+                        biasLines = [];
+                        const biasColors = ['#E91E63', '#00BCD4', '#FFEB3B'];  // 粉紅、青色、黃色
+                        data.bias.forEach((b, i) => {
+                            if(b.length) {
+                                const l = biasChart.addLineSeries({ color: biasColors[i], lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                                l.setData(b);
+                                biasLines.push(l);
+                            }
+                        });
                         
                         // --- MACD Chart ---
                         if (difLine) macdChart.removeSeries(difLine);
