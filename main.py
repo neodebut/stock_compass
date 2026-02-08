@@ -466,6 +466,39 @@ HTML_TEMPLATE = """
             padding: 2px 6px;
             border-radius: 3px;
         }
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 400px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.9);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            overflow-y: auto;
+            z-index: 9999;
+            border-top: 1px solid #333;
+            border-left: 1px solid #333;
+        }
+        .debug-panel .log-entry { margin: 2px 0; }
+        .debug-panel .log-error { color: #f66; }
+        .debug-panel .log-warn { color: #ff0; }
+        .debug-panel .log-success { color: #0f0; }
+        .debug-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            z-index: 10000;
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex">
@@ -524,6 +557,13 @@ HTML_TEMPLATE = """
             <!-- Error Overlay -->
             <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
         </div>
+        <!-- Debug Panel -->
+        <button class="debug-toggle" @click="showDebug = !showDebug">{{ showDebug ? '隱藏' : '📋' }} Log</button>
+        <div v-if="showDebug" class="debug-panel" ref="debugPanel">
+            <div v-for="(log, i) in debugLogs" :key="i" :class="['log-entry', log.type]">
+                {{ log.time }} {{ log.msg }}
+            </div>
+        </div>
     </div>
     <script>
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
@@ -534,6 +574,21 @@ HTML_TEMPLATE = """
                 const currentStock = ref(__STOCK_LIST__[0]);
                 const loading = ref(false);
                 const error = ref(null);
+                const showDebug = ref(false);
+                const debugLogs = ref([]);
+                const debugPanel = ref(null);
+                
+                const addLog = (msg, type = '') => {
+                    const now = new Date();
+                    const time = now.toLocaleTimeString('zh-TW', {hour12: false}) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+                    debugLogs.value.push({ time, msg, type });
+                    if (debugLogs.value.length > 50) debugLogs.value.shift();
+                    // Auto scroll
+                    nextTick(() => {
+                        if (debugPanel.value) debugPanel.value.scrollTop = debugPanel.value.scrollHeight;
+                    });
+                    console.log(`[${time}] ${msg}`);
+                };
                 
                 // Chart containers
                 const chartsScrollContainer = ref(null);
@@ -628,15 +683,32 @@ HTML_TEMPLATE = """
                 };
 
                 const loadStockData = async (stock) => {
-                    if (abortController) abortController.abort();
+                    const requestId = Date.now();
+                    addLog(`🔵 SELECT: ${stock.symbol}`, 'log-success');
+                    
+                    if (abortController) {
+                        addLog(`⚠️ Aborting previous request`, 'log-warn');
+                        abortController.abort();
+                    }
                     abortController = new AbortController();
                     const signal = abortController.signal;
 
                     loading.value = true; error.value = null;
+                    const fetchStart = performance.now();
+                    
                     try {
+                        addLog(`📡 FETCH: /api/stock/${stock.symbol}`);
                         const res = await fetch(`/api/stock/${stock.symbol}`, { signal });
+                        const fetchEnd = performance.now();
+                        addLog(`✅ FETCH: ${(fetchEnd - fetchStart).toFixed(0)}ms`, 'log-success');
+                        
                         if (!res.ok) throw new Error("API Error");
+                        
+                        const parseStart = performance.now();
                         const data = await res.json();
+                        addLog(`📊 JSON: candles=${data.candles?.length || 0}`);
+                        
+                        const renderStart = performance.now();
                         
                         // --- Main Chart: Candlesticks + MA ---
                         candleSeries.setData(data.candles);
@@ -695,21 +767,31 @@ HTML_TEMPLATE = """
                         deaLine.setData(data.macd.dea);
                         histSeries.setData(data.macd.histogram);
                         
+                        addLog(`🎨 RENDER: ${(performance.now() - renderStart).toFixed(0)}ms`, 'log-success');
                         mainChart.timeScale().fitContent();
+                        addLog(`✅ DONE: Total ${(performance.now() - fetchStart).toFixed(0)}ms`, 'log-success');
                     } catch (e) { 
                         if (e.name === 'AbortError') {
-                            console.log('Fetch aborted');
+                            addLog(`🚫 ABORTED: ${stock.symbol}`, 'log-warn');
                             return;
                         }
+                        addLog(`❌ ERROR: ${e.message}`, 'log-error');
                         error.value = e.message;
                     } finally {
                         if (!signal.aborted) {
                             loading.value = false;
+                            addLog(`🏁 Loading=false`);
+                        } else {
+                            addLog(`⏭️ Skip loading=false (aborted)`, 'log-warn');
                         }
                     }
                 };
 
-                const selectStock = (s) => { currentStock.value = s; loadStockData(s); };
+                const selectStock = (s) => { 
+                    addLog(`👆 CLICK: ${s.symbol}`, 'log-success');
+                    currentStock.value = s; 
+                    loadStockData(s); 
+                };
 
                 onMounted(() => { 
                     nextTick(() => {
@@ -721,7 +803,7 @@ HTML_TEMPLATE = """
                 return { 
                     isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, 
                     chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer,
-                    loading, error 
+                    loading, error, showDebug, debugLogs, debugPanel
                 };
             }
         }).mount('#app');
