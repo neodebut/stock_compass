@@ -309,56 +309,59 @@ def update_database():
     print("<<< Incremental database update complete.")
 
 def refresh_cache():
-    """Load all stock data from DB into memory cache with all indicators"""
+    """Load stock data from DB into memory cache one by one to avoid OOM"""
     print(">>> Refreshing memory cache...")
     db = SessionLocal()
     try:
-        stocks = db.query(StockData).all()
+        # Get list of unique symbols first
+        symbols = [r[0] for r in db.query(StockData.symbol).distinct()]
         
-        data_by_symbol = {}
-        for row in stocks:
-            if row.symbol not in data_by_symbol:
-                data_by_symbol[row.symbol] = []
-            data_by_symbol[row.symbol].append(row)
-            
-        for symbol, rows in data_by_symbol.items():
-            rows.sort(key=lambda x: x.date)
-            
-            candles = []
-            dates = []
-            opens = []
-            highs = []
-            lows = []
-            closes = []
-            
-            for r in rows:
-                date_str = r.date.strftime('%Y-%m-%d')
-                candles.append({
-                    "time": date_str,
-                    "open": r.open, "high": r.high, "low": r.low, "close": r.close
-                })
-                dates.append(date_str)
-                opens.append(r.open)
-                highs.append(r.high)
-                lows.append(r.low)
-                closes.append(r.close)
+        for symbol in symbols:
+            try:
+                rows = db.query(StockData).filter(StockData.symbol == symbol).order_by(StockData.date).all()
                 
-            df = pd.DataFrame({
-                "date": dates,
-                "open": opens,
-                "high": highs,
-                "low": lows,
-                "close": closes
-            })
-            
-            # Calculate all indicators
-            indicators = calculate_all_indicators(df)
-            
-            STOCK_DATA_CACHE[symbol] = {
-                "symbol": symbol, 
-                "candles": candles,
-                **indicators
-            }
+                candles = []
+                dates = []
+                opens = []
+                highs = []
+                lows = []
+                closes = []
+                
+                for r in rows:
+                    date_str = r.date.strftime('%Y-%m-%d')
+                    candles.append({
+                        "time": date_str,
+                        "open": r.open, "high": r.high, "low": r.low, "close": r.close
+                    })
+                    dates.append(date_str)
+                    opens.append(r.open)
+                    highs.append(r.high)
+                    lows.append(r.low)
+                    closes.append(r.close)
+                    
+                df = pd.DataFrame({
+                    "date": dates,
+                    "open": opens,
+                    "high": highs,
+                    "low": lows,
+                    "close": closes
+                })
+                
+                # Calculate all indicators
+                indicators = calculate_all_indicators(df)
+                
+                STOCK_DATA_CACHE[symbol] = {
+                    "symbol": symbol, 
+                    "candles": candles,
+                    **indicators
+                }
+                print(f"  [{symbol}] Cached {len(rows)} records")
+                
+                # Sleep briefly to yield CPU
+                time.sleep(0.1)
+                
+            except Exception as e:
+                print(f"!!! Error caching {symbol}: {e}")
             
         print(f"<<< Cache refreshed. Loaded {len(STOCK_DATA_CACHE)} symbols.")
     except Exception as e:
