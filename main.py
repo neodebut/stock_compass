@@ -819,12 +819,17 @@ async def read_root():
     return content
 
 @app.get("/api/stock/{symbol}")
-def get_stock(symbol: str):
+async def get_stock(symbol: str):
     # FAST PATH: Read from memory cache
     if symbol in STOCK_DATA_CACHE:
         return STOCK_DATA_CACHE[symbol]
         
-    # Fallback: Query DB and calculate indicators
+    # Fallback: Run in background thread to avoid blocking
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, query_and_calculate, symbol)
+
+def query_and_calculate(symbol):
     print(f"[{symbol}] Cache miss, querying DB...")
     db = SessionLocal()
     try:
