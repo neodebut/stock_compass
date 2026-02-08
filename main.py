@@ -307,7 +307,17 @@ HTML_TEMPLATE = """
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #1a1a1a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        .loader { border: 3px solid #333; border-top: 3px solid #3498db; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        .loader { 
+            border: 3px solid #333; 
+            border-top: 3px solid #3498db; 
+            border-radius: 50%; 
+            width: 24px; 
+            height: 24px; 
+            min-width: 24px;
+            min-height: 24px;
+            flex-shrink: 0;
+            animation: spin 1s linear infinite; 
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         [v-cloak] { display: none; }
         .stock-item.active { background-color: #2563eb; color: white; }
