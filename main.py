@@ -911,6 +911,19 @@ async def get_stock(symbol: str):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, query_and_calculate, symbol)
 
+@app.post("/api/admin/update")
+async def manual_update():
+    """Manual trigger for data update"""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    # Run update in background
+    loop.run_in_executor(None, run_update_job)
+    return {"status": "Update job started"}
+
+def run_update_job():
+    update_database()
+    refresh_cache()
+
 def query_and_calculate(symbol):
     print(f"[{symbol}] Cache miss, querying DB...")
     db = SessionLocal()
