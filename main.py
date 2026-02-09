@@ -350,12 +350,39 @@ def refresh_cache():
                 # Calculate all indicators
                 indicators = calculate_all_indicators(df)
                 
-                STOCK_DATA_CACHE[symbol] = {
-                    "symbol": symbol, 
-                    "candles": candles,
-                    **indicators
+                # Optimize structure
+                ma_values = []
+                for ma_line in indicators['ma']:
+                    ma_values.append([p['value'] for p in ma_line])
+                    
+                rsi_values = []
+                for rsi_line in indicators['rsi']:
+                    rsi_values.append([p['value'] for p in rsi_line])
+                    
+                k_values = [p['value'] for p in indicators['kd']['k']]
+                d_values = [p['value'] for p in indicators['kd']['d']]
+                
+                bias_values = []
+                for bias_line in indicators['bias']:
+                    bias_values.append([p['value'] for p in bias_line])
+                    
+                dif_values = [p['value'] for p in indicators['macd']['dif']]
+                dea_values = [p['value'] for p in indicators['macd']['dea']]
+                hist_values = [p['value'] for p in indicators['macd']['histogram']]
+                
+                optimized_result = {
+                    "symbol": symbol,
+                    "dates": dates,
+                    "opens": opens, "highs": highs, "lows": lows, "closes": closes,
+                    "ma": ma_values,
+                    "rsi": rsi_values,
+                    "kd": {"k": k_values, "d": d_values},
+                    "bias": bias_values,
+                    "macd": {"dif": dif_values, "dea": dea_values, "histogram": hist_values}
                 }
-                print(f"  [{symbol}] Cached {len(rows)} records")
+                
+                STOCK_DATA_CACHE[symbol] = optimized_result
+                print(f"  [{symbol}] Cached {len(rows)} records (Optimized)")
                 
                 # Sleep briefly to yield CPU
                 time.sleep(0.1)
@@ -711,6 +738,30 @@ HTML_TEMPLATE = """
                         
                         const parseStart = performance.now();
                         const data = await res.json();
+                        
+                        // Reconstruct data if optimized format
+                        if (data.dates) {
+                            const dates = data.dates;
+                            data.candles = dates.map((d, i) => ({
+                                time: d,
+                                open: data.opens[i], high: data.highs[i], low: data.lows[i], close: data.closes[i]
+                            }));
+                            
+                            data.ma = data.ma.map(line => line.map((v, i) => ({ time: dates[i], value: v })));
+                            data.rsi = data.rsi.map(line => line.map((v, i) => ({ time: dates[i], value: v })));
+                            
+                            data.kd.k = data.kd.k.map((v, i) => ({ time: dates[i], value: v }));
+                            data.kd.d = data.kd.d.map((v, i) => ({ time: dates[i], value: v }));
+                            
+                            data.bias = data.bias.map(line => line.map((v, i) => ({ time: dates[i], value: v })));
+                            
+                            data.macd.dif = data.macd.dif.map((v, i) => ({ time: dates[i], value: v }));
+                            data.macd.dea = data.macd.dea.map((v, i) => ({ time: dates[i], value: v }));
+                            data.macd.histogram = data.macd.histogram.map((v, i) => ({ 
+                                time: dates[i], value: v, color: v >= 0 ? '#26A69A' : '#EF5350'
+                            }));
+                        }
+                        
                         addLog(`📊 JSON: candles=${data.candles?.length || 0}`);
                         
                         const renderStart = performance.now();
@@ -898,8 +949,38 @@ def query_and_calculate(symbol):
         
         indicators = calculate_all_indicators(df)
         
-        result = {"symbol": symbol, "candles": candles, **indicators}
-        STOCK_DATA_CACHE[symbol] = result
-        return JSONResponse(content=result)
+        # Optimize structure
+        ma_values = []
+        for ma_line in indicators['ma']:
+            ma_values.append([p['value'] for p in ma_line])
+            
+        rsi_values = []
+        for rsi_line in indicators['rsi']:
+            rsi_values.append([p['value'] for p in rsi_line])
+            
+        k_values = [p['value'] for p in indicators['kd']['k']]
+        d_values = [p['value'] for p in indicators['kd']['d']]
+        
+        bias_values = []
+        for bias_line in indicators['bias']:
+            bias_values.append([p['value'] for p in bias_line])
+            
+        dif_values = [p['value'] for p in indicators['macd']['dif']]
+        dea_values = [p['value'] for p in indicators['macd']['dea']]
+        hist_values = [p['value'] for p in indicators['macd']['histogram']]
+        
+        optimized_result = {
+            "symbol": symbol,
+            "dates": dates,
+            "opens": opens, "highs": highs, "lows": lows, "closes": closes,
+            "ma": ma_values,
+            "rsi": rsi_values,
+            "kd": {"k": k_values, "d": d_values},
+            "bias": bias_values,
+            "macd": {"dif": dif_values, "dea": dea_values, "histogram": hist_values}
+        }
+        
+        STOCK_DATA_CACHE[symbol] = optimized_result
+        return JSONResponse(content=optimized_result)
     finally:
         db.close()
