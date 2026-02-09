@@ -443,6 +443,11 @@ def load_seed_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_seed_data()
+    
+    # Update data on startup to ensure freshness after deploy
+    print(">>> Running startup data update...")
+    update_database()
+    
     refresh_cache()
     
     scheduler = BackgroundScheduler()
