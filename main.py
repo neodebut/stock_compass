@@ -591,32 +591,109 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <!-- Chart Area -->
-        <div class="flex-1 flex flex-col h-full bg-[#131722] relative overflow-hidden">
-            <!-- Header -->
-            <div class="h-14 bg-[#1e222d] border-b border-[#2a2e39] flex items-center px-4 justify-between flex-shrink-0">
-                <div class="flex items-center">
-                    <button @click="isSidebarOpen = !isSidebarOpen" class="text-gray-400 mr-4"><i class="fas fa-bars"></i></button>
-                    <div v-if="currentStock" class="text-lg font-bold text-white">{{ currentStock.symbol }} <span class="text-sm font-normal text-gray-400">{{ currentStock.name }}</span></div>
+        <div class="flex-1 flex flex-col h-full bg-[#0a0e17] relative overflow-hidden">
+            <!-- New Header - Yuanta Style -->
+            <div class="bg-[#1a2332] border-b border-[#2a3a4a] px-4 py-3 flex-shrink-0">
+                <!-- Top Row: Stock Name & Price -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-3">
+                        <button @click="isSidebarOpen = !isSidebarOpen" class="text-gray-400 hover:text-white">
+                            <i class="fas fa-bars text-lg"></i>
+                        </button>
+                        <div v-if="currentStock">
+                            <div class="flex items-center gap-2">
+                                <span class="text-white text-xl font-bold">{{ currentStock.name }}</span>
+                                <span class="bg-purple-600 text-white text-xs px-2 py-0.5 rounded">市</span>
+                                <span class="text-gray-400 text-lg">{{ currentStock.symbol }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="currentCandle" class="text-right">
+                        <div class="text-3xl font-bold" :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
+                            {{ currentCandle.close.toFixed(2) }}
+                        </div>
+                        <div class="flex items-center justify-end gap-2 text-sm">
+                            <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
+                                <i v-if="priceChange >= 0" class="fas fa-caret-up"></i>
+                                <i v-else class="fas fa-caret-down"></i>
+                                {{ Math.abs(priceChange).toFixed(2) }}
+                            </span>
+                            <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
+                                {{ priceChangePercent.toFixed(2) }}%
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <div v-if="loading" class="loader"></div>
+                
+                <!-- Info Dashboard - OHLCV -->
+                <div v-if="currentCandle" class="bg-[#0f1419] rounded-lg p-3 mt-2">
+                    <div class="grid grid-cols-6 gap-4 text-center">
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">日期</div>
+                            <div class="text-white text-sm">{{ currentCandle.time }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">開</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.open.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">高</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.high.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">低</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.low.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">收</div>
+                            <div :class="currentCandle.close >= currentCandle.open ? 'text-red-400' : 'text-green-400'" class="text-sm font-mono font-bold">
+                                {{ currentCandle.close.toFixed(2) }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">量</div>
+                            <div class="text-yellow-400 text-sm font-mono">{{ formatVolume(currentCandle.volume) }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- MA Values Row -->
+                <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 mt-2 px-2">
+                    <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1 text-xs">
+                        <span :style="{ color: __MA_COLORS__[i] }">MA{{ __MA_PERIODS__[i] }}</span>
+                        <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
+                    </div>
+                </div>
             </div>
+            
+            <!-- Loading Indicator -->
+            <div v-if="loading" class="absolute top-20 right-4 z-50">
+                <div class="loader"></div>
+            </div>
+            
             <!-- Charts Container (Scrollable) -->
-            <div class="flex-1 overflow-y-auto" ref="chartsScrollContainer">
+            <div class="flex-1 overflow-y-auto bg-[#0a0e17]" ref="chartsScrollContainer">
                 <!-- Main Candlestick Chart -->
-                <div class="relative" style="height: 55%;">
-                    <span class="chart-label">K線 + MA</span>
+                <div class="relative" style="height: 50%;">
                     <div ref="mainChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- RSI Chart -->
-                <div class="relative chart-section" style="height: 12%;">
-                    <span class="chart-label">RSI (17, 44)</span>
+                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
                     <div ref="rsiChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- KD Chart -->
-                <div class="relative chart-section" style="height: 12%;">
-                    <span class="chart-label">KD (17, 3, 3)</span>
+                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
                     <div ref="kdChartContainer" class="absolute inset-0"></div>
                 </div>
+                <!-- BIAS Chart -->
+                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                    <div ref="biasChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- MACD Chart -->
+                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                    <div ref="macdChartContainer" class="absolute inset-0"></div>
+                </div>
+            </div>
                 <!-- BIAS Chart -->
                 <div class="relative chart-section" style="height: 10%;">
                     <span class="chart-label">BIAS (117, 17, 45)</span>
@@ -651,6 +728,20 @@ HTML_TEMPLATE = """
                 const showDebug = ref(false);
                 const debugLogs = ref([]);
                 const debugPanel = ref(null);
+                
+                // Yuanta-style new reactive variables
+                const currentCandle = ref(null);
+                const currentMAs = ref([]);
+                const priceChange = ref(0);
+                const priceChangePercent = ref(0);
+                
+                // Format volume (convert to K/M)
+                const formatVolume = (vol) => {
+                    if (!vol) return '--';
+                    if (vol >= 1000000) return (vol / 1000000).toFixed(2) + 'M';
+                    if (vol >= 1000) return (vol / 1000).toFixed(0) + 'K';
+                    return vol.toString();
+                };
                 
                 const addLog = (msg, type = '') => {
                     const now = new Date();
@@ -718,6 +809,30 @@ HTML_TEMPLATE = """
                     macdChart = LightweightCharts.createChart(macdChartContainer.value, {
                         ...chartOptions(),
                         rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } }
+                    });
+                    
+                    // Crosshair Move Handler - Yuanta Style
+                    mainChart.subscribeCrosshairMove(param => {
+                        if (!param.time) {
+                            return;
+                        }
+                        
+                        const candleData = param.seriesData.get(candleSeries);
+                        if (candleData) {
+                            currentCandle.value = candleData;
+                            priceChange.value = candleData.close - candleData.open;
+                            priceChangePercent.value = (priceChange.value / candleData.open) * 100;
+                            
+                            // Update MA values
+                            const mas = [];
+                            maLines.forEach((line, i) => {
+                                const val = param.seriesData.get(line);
+                                if (val !== undefined) {
+                                    mas.push({ period: __MA_PERIODS__[i], value: val.value });
+                                }
+                            });
+                            currentMAs.value = mas;
+                        }
                     });
                     
                     // Sync all charts' time scales
@@ -810,6 +925,15 @@ HTML_TEMPLATE = """
                         
                         // --- Main Chart: Candlesticks + MA ---
                         candleSeries.setData(data.candles);
+                        
+                        // Initialize current candle with the last one
+                        if (data.candles.length > 0) {
+                            const lastCandle = data.candles[data.candles.length - 1];
+                            currentCandle.value = lastCandle;
+                            priceChange.value = lastCandle.close - lastCandle.open;
+                            priceChangePercent.value = (priceChange.value / lastCandle.open) * 100;
+                        }
+                        
                         maLines.forEach(l => mainChart.removeSeries(l));
                         maLines = [];
                         data.ma.forEach((m, i) => {
@@ -819,6 +943,14 @@ HTML_TEMPLATE = """
                                 maLines.push(l);
                             }
                         });
+                        
+                        maLines.forEach((l, i) => {
+                            if (data.ma[i]?.length > 0) {
+                                const lastMA = data.ma[i][data.ma[i].length - 1];
+                                mas.push({ period: __MA_PERIODS__[i], value: lastMA.value });
+                            }
+                        });
+                        currentMAs.value = mas;
                         
                         // --- RSI Chart ---
                         rsiLines.forEach(l => rsiChart.removeSeries(l));
@@ -927,7 +1059,8 @@ HTML_TEMPLATE = """
                 return { 
                     isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, 
                     chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer,
-                    loading, error, showDebug, debugLogs, debugPanel
+                    loading, error, showDebug, debugLogs, debugPanel,
+                    currentCandle, currentMAs, priceChange, priceChangePercent, formatVolume
                 };
             }
         }).mount('#app');
