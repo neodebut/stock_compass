@@ -903,6 +903,7 @@ HTML_TEMPLATE = """
 async def read_root():
     content = HTML_TEMPLATE.replace("__STOCK_LIST__", json.dumps(STOCK_LIST))
     content = content.replace("__MA_COLORS__", json.dumps(MA_COLORS))
+    content = content.replace("__MA_PERIODS__", json.dumps(MA_PERIODS))
     return content
 
 @app.get("/api/stock/{symbol}")
