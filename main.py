@@ -576,7 +576,7 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body class="h-screen w-screen flex">
-    <div id="app" v-cloak class="flex w-full h-full">
+    <div id="app" class="flex w-full h-full">
         <!-- Sidebar -->
         <div :class="['bg-neutral-900 border-r border-neutral-800 flex flex-col z-20 h-full flex-shrink-0', isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden']">
             <div class="p-4 border-b border-neutral-800"><h1 class="text-xl font-bold text-blue-400">StockView</h1></div>
