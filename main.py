@@ -706,9 +706,12 @@ HTML_TEMPLATE = """
         </div>
     </div>
     <script>
+        console.log('DEBUG: Script tag found, Vue available?', typeof Vue);
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
+        console.log('DEBUG: Destructuring Vue OK');
         createApp({
             setup() {
+                console.log('DEBUG: Vue setup() started');
                 const isSidebarOpen = ref(window.innerWidth > 768);
                 const currentMarket = ref('TW');
                 const currentStock = ref(__STOCK_LIST__[0]);
