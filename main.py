@@ -9,6 +9,7 @@ import os
 import requests
 import random
 import time
+import yfinance as yf
 from datetime import datetime, timedelta
 from fake_useragent import UserAgent
 from sqlalchemy import create_engine, Column, String, Float, Integer, Date
@@ -185,10 +186,42 @@ def calculate_all_indicators(df):
     return result
 
 # --- Data Fetching Logic (Restored) ---
-def fetch_stooq_data(symbol_info):
+def fetch_stock_data(symbol_info):
+    """Fetch stock data: Try Yahoo Finance first, then Stooq"""
     symbol = symbol_info['symbol']
     google_symbol = symbol_info['google_symbol']
     
+    # 1. Try Yahoo Finance (Preferred for real-time data)
+    try:
+        if "TPE:" in google_symbol:
+            yf_ticker = symbol + ".TW"
+        elif "NASDAQ:" in google_symbol:
+            yf_ticker = symbol
+        else:
+            yf_ticker = symbol
+            
+        print(f"[{symbol}] Fetching from Yahoo Finance ({yf_ticker})...")
+        ticker = yf.Ticker(yf_ticker)
+        df = ticker.history(period="5y")
+        
+        if not df.empty:
+            records = []
+            for date, row in df.iterrows():
+                records.append({
+                    "symbol": symbol,
+                    "date": date.date(),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": int(row['Volume'])
+                })
+            print(f"[{symbol}] Yahoo success! Got {len(records)} records")
+            return records
+    except Exception as e:
+        print(f"[{symbol}] Yahoo failed: {e}")
+
+    # 2. Fallback to Stooq
     # Map to Stooq format
     if "TPE:" in google_symbol:
         stooq_code = google_symbol.split(":")[1] + ".TW"
@@ -200,7 +233,7 @@ def fetch_stooq_data(symbol_info):
         stooq_code = google_symbol
 
     url = f"https://stooq.com/q/d/l/?s={stooq_code}&i=d"
-    print(f"[{symbol}] Fetching from {url}...")
+    print(f"[{symbol}] Fallback fetching from Stooq {url}...")
     
     try:
         headers = {'User-Agent': UserAgent().random}
@@ -280,7 +313,7 @@ def update_database():
             print(f"[{symbol}] No existing data, will fetch all")
         
         # 抓取資料
-        data = fetch_stooq_data(stock)
+        data = fetch_stock_data(stock)
         
         if not data:
             print(f"[{symbol}] Fetch failed, keeping existing data.")
