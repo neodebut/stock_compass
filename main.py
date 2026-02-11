@@ -694,17 +694,6 @@ HTML_TEMPLATE = """
                     <div ref="macdChartContainer" class="absolute inset-0"></div>
                 </div>
             </div>
-                <!-- BIAS Chart -->
-                <div class="relative chart-section" style="height: 10%;">
-                    <span class="chart-label">BIAS (117, 17, 45)</span>
-                    <div ref="biasChartContainer" class="absolute inset-0"></div>
-                </div>
-                <!-- MACD Chart -->
-                <div class="relative chart-section" style="height: 15%;">
-                    <span class="chart-label">MACD (45, 117, 17)</span>
-                    <div ref="macdChartContainer" class="absolute inset-0"></div>
-                </div>
-            </div>
             <!-- Error Overlay -->
             <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
         </div>
