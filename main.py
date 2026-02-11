@@ -216,10 +216,14 @@ def fetch_stock_data(symbol_info):
                     "close": float(row['Close']),
                     "volume": int(row['Volume'])
                 })
-            print(f"[{symbol}] Yahoo success! Got {len(records)} records")
+            print(f"[{symbol}] Yahoo success! Got {len(records)} records, latest: {records[-1]['date']}")
             return records
+        else:
+            print(f"[{symbol}] Yahoo returned EMPTY data")
     except Exception as e:
-        print(f"[{symbol}] Yahoo failed: {e}")
+        print(f"[{symbol}] Yahoo Finance ERROR: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
 
     # 2. Fallback to Stooq
     # Map to Stooq format
@@ -296,6 +300,7 @@ def generate_fake_data(symbol):
 def update_database():
     """增量更新：只新增資料庫中沒有的日期資料，保留所有歷史紀錄"""
     print(">>> Starting incremental database update job...")
+    print(f">>> Current UTC time: {datetime.now()}")
     db = SessionLocal()
     
     for stock in STOCK_LIST:
@@ -307,16 +312,13 @@ def update_database():
             StockData.symbol == symbol
         ).scalar()
         
-        if latest_record:
-            print(f"[{symbol}] Latest date in DB: {latest_record}")
-        else:
-            print(f"[{symbol}] No existing data, will fetch all")
+        print(f"[{symbol}] DB latest: {latest_record}, fetching new data...")
         
         # 抓取資料
         data = fetch_stock_data(stock)
         
         if not data:
-            print(f"[{symbol}] Fetch failed, keeping existing data.")
+            print(f"[{symbol}] Fetch returned NO DATA")
             continue
         
         # 過濾出新資料（日期比資料庫中最新日期還新的）
@@ -326,15 +328,17 @@ def update_database():
             new_data = data
         
         if not new_data:
-            print(f"[{symbol}] Already up-to-date, no new data.")
+            print(f"[{symbol}] Already up-to-date, no new data to add.")
             time.sleep(2)
             continue
+        
+        print(f"[{symbol}] Found {len(new_data)} new records to add")
         
         # 只插入新資料
         objects = [StockData(**d) for d in new_data]
         db.bulk_save_objects(objects)
         db.commit()
-        print(f"[{symbol}] Added {len(new_data)} new records. (Total fetched: {len(data)})")
+        print(f"[{symbol}] Successfully added {len(new_data)} records")
         
         time.sleep(5) 
     
