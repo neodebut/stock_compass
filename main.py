@@ -116,15 +116,15 @@ def calculate_all_indicators(df):
     # MA Lines
     ma_results = []
     for p in MA_PERIODS:
-        if len(df) >= p:
-            ma_col = df['close'].rolling(window=p).mean()
-            ma_data = []
-            for idx, val in ma_col.items():
-                if not pd.isna(val):
-                    ma_data.append({"time": df.loc[idx, "date"], "value": float(val)})
-            ma_results.append(ma_data)
-        else:
-            ma_results.append([])
+        ma_col = df['close'].rolling(window=p).mean()
+        ma_data = []
+        for idx, val in ma_col.items():
+            # Keep structure aligned with dates, use None for NaN
+            if not pd.isna(val):
+                ma_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+            else:
+                ma_data.append({"time": df.loc[idx, "date"], "value": None})
+        ma_results.append(ma_data)
     result['ma'] = ma_results
     
     # RSI
@@ -135,6 +135,8 @@ def calculate_all_indicators(df):
         for idx, val in rsi.items():
             if not pd.isna(val):
                 rsi_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+            else:
+                rsi_data.append({"time": df.loc[idx, "date"], "value": None})
         rsi_results.append(rsi_data)
     result['rsi'] = rsi_results
     
@@ -146,11 +148,16 @@ def calculate_all_indicators(df):
     for idx in df.index:
         if not pd.isna(k.loc[idx]):
             k_data.append({"time": df.loc[idx, "date"], "value": float(k.loc[idx])})
+        else:
+            k_data.append({"time": df.loc[idx, "date"], "value": None})
+            
         if not pd.isna(d.loc[idx]):
             d_data.append({"time": df.loc[idx, "date"], "value": float(d.loc[idx])})
+        else:
+            d_data.append({"time": df.loc[idx, "date"], "value": None})
     result['kd'] = {'k': k_data, 'd': d_data}
     
-    # BIAS (三條線: BIAS1=117, BIASAV1=17, BIASAV2=45)
+    # BIAS
     bias_results = []
     for p in BIAS_PERIODS:
         bias = calc_bias(df['close'], p)
@@ -158,6 +165,8 @@ def calculate_all_indicators(df):
         for idx, val in bias.items():
             if not pd.isna(val):
                 bias_data.append({"time": df.loc[idx, "date"], "value": float(val)})
+            else:
+                bias_data.append({"time": df.loc[idx, "date"], "value": None})
         bias_results.append(bias_data)
     result['bias'] = bias_results
     
@@ -169,17 +178,26 @@ def calculate_all_indicators(df):
     hist_data = []
     for idx in df.index:
         time_str = df.loc[idx, "date"]
+        
         if not pd.isna(dif.loc[idx]):
             dif_data.append({"time": time_str, "value": float(dif.loc[idx])})
+        else:
+            dif_data.append({"time": time_str, "value": None})
+            
         if not pd.isna(dea.loc[idx]):
             dea_data.append({"time": time_str, "value": float(dea.loc[idx])})
+        else:
+            dea_data.append({"time": time_str, "value": None})
+            
         if not pd.isna(macd_hist.loc[idx]):
-            # Histogram with color based on value
             hist_data.append({
                 "time": time_str, 
                 "value": float(macd_hist.loc[idx]),
                 "color": '#26A69A' if macd_hist.loc[idx] >= 0 else '#EF5350'
             })
+        else:
+            hist_data.append({"time": time_str, "value": None})
+            
     result['macd'] = {'dif': dif_data, 'dea': dea_data, 'histogram': hist_data}
     
     return result
