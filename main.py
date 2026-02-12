@@ -964,6 +964,7 @@ HTML_TEMPLATE = """
                             }
                         });
                         
+                        const mas = [];
                         maLines.forEach((l, i) => {
                             if (data.ma[i]?.length > 0) {
                                 const lastMA = data.ma[i][data.ma[i].length - 1];
