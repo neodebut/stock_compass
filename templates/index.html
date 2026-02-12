@@ -258,7 +258,15 @@
                 const initCharts = () => {
                     // Main chart with candlesticks
                     mainChart = LightweightCharts.createChart(mainChartContainer.value, chartOptions());
-                    candleSeries = mainChart.addCandlestickSeries();
+                    // Taiwan Style: Red for Up, Green for Down
+                    candleSeries = mainChart.addCandlestickSeries({
+                        upColor: '#EF5350', 
+                        downColor: '#26A69A',
+                        borderUpColor: '#EF5350', 
+                        borderDownColor: '#26A69A', 
+                        wickUpColor: '#EF5350', 
+                        wickDownColor: '#26A69A'
+                    });
                     
                     // RSI chart
                     rsiChart = LightweightCharts.createChart(rsiChartContainer.value, {

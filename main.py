@@ -193,7 +193,7 @@ def calculate_all_indicators(df):
             hist_data.append({
                 "time": time_str, 
                 "value": float(macd_hist.loc[idx]),
-                "color": '#26A69A' if macd_hist.loc[idx] >= 0 else '#EF5350'
+                "color": '#EF5350' if macd_hist.loc[idx] >= 0 else '#26A69A'
             })
         else:
             hist_data.append({"time": time_str, "value": None})
