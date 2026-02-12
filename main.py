@@ -1216,9 +1216,9 @@ def query_and_calculate(symbol):
         
         indicators = calculate_all_indicators(df)
         
-        # Limit to last 1500 records (~6 years) for frontend performance
+        # Limit to last 2000 records (~8 years) for frontend performance
         # Note: We calculated indicators using full history for accuracy
-        LIMIT = 1500
+        LIMIT = 2000
         
         dates = dates[-LIMIT:]
         opens = opens[-LIMIT:]
