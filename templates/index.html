@@ -166,7 +166,13 @@
             <!-- Error Overlay -->
             <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
         </div>
+        
+        <!-- Loading Overlay (Centered) -->
+        <div v-if="loading" class="absolute inset-0 flex flex-col items-center justify-center z-50" style="background-color: rgba(0,0,0,0.5);">
+            <div class="loader mb-2"></div>
+            <div class="text-blue-400 font-bold">載入中...</div>
         </div>
+
         <!-- Debug Panel -->
         <button class="debug-toggle" @click="showDebug = !showDebug">{{ showDebug ? '隱藏' : '📋' }} Log</button>
         <div v-if="showDebug" class="debug-panel" ref="debugPanel">
