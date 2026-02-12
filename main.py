@@ -615,6 +615,11 @@ HTML_TEMPLATE = """
         </div>
         <!-- Chart Area -->
         <div class="flex-1 flex flex-col h-full bg-[#0a0e17] relative overflow-hidden">
+            <!-- DEBUG: Always visible status -->
+            <div style="position: absolute; top: 0; left: 0; right: 0; background: red; color: white; z-index: 99999; padding: 10px;">
+                DEBUG: Vue is running | Stock: {{ currentStock?.symbol || 'NONE' }} | Market: {{ currentMarket }}
+            </div>
+            
             <!-- New Header - Yuanta Style -->
             <div class="bg-[#1a2332] border-b border-[#2a3a4a] px-4 py-3 flex-shrink-0">
                 <!-- Top Row: Stock Name & Price -->
