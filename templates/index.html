@@ -126,25 +126,72 @@
                     </div>
                 </div>
                 
-                <!-- Info Dashboard - OHLCV (Temporarily Disabled) -->
-                <!-- 
+                <!-- Info Dashboard - OHLCV -->
                 <div v-if="currentCandle" class="rounded-lg p-3 mt-2" style="background-color: #0f1419;">
-                   ... (Removed for debug)
+                    <div class="grid grid-cols-6 gap-4 text-center">
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">日期</div>
+                            <div class="text-white text-sm">{{ currentCandle.time }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">開</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.open.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">高</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.high.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">低</div>
+                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.low.toFixed(2) }}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">收</div>
+                            <div :class="currentCandle.close >= currentCandle.open ? 'text-red-400' : 'text-green-400'" class="text-sm font-mono font-bold">
+                                {{ currentCandle.close.toFixed(2) }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 text-xs mb-1">量</div>
+                            <div class="text-yellow-400 text-sm font-mono">{{ formatVolume(currentCandle.volume) }}</div>
+                        </div>
+                    </div>
                 </div>
-                -->
                 
                 <!-- MA Values Row -->
                 <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 mt-2 px-2">
                     <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1 text-xs">
-                        <span :style="{ color: __MA_COLORS__[i] }">MA{{ __MA_PERIODS__[i] }}</span>
+                        <span :style="{ color: maColors[i] }">MA{{ maPeriods[i] }}</span>
                         <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
                     </div>
                 </div>
             </div>
             
-            <div class="flex items-center justify-center h-full text-white">
-                <h1>Chart Area (Still Disabled)</h1>
+            <!-- Charts Container (Scrollable) -->
+            <div class="flex-1 overflow-y-auto" ref="chartsScrollContainer" style="background-color: #0a0e17;">
+                <!-- Main Candlestick Chart -->
+                <div class="relative" style="height: 50%;">
+                    <div ref="mainChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- RSI Chart -->
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                    <div ref="rsiChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- KD Chart -->
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                    <div ref="kdChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- BIAS Chart -->
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                    <div ref="biasChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- MACD Chart -->
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                    <div ref="macdChartContainer" class="absolute inset-0"></div>
+                </div>
             </div>
+            <!-- Error Overlay -->
+            <div v-if="error" class="absolute inset-0 flex items-center justify-center bg-black/80 text-red-400 z-50">{{ error }}</div>
         </div>
         </div>
         <!-- Debug Panel -->
@@ -157,6 +204,12 @@
     </div>
     <script>
         console.log('DEBUG: Script tag found, Vue available?', typeof Vue);
+        
+        // Define constants injected by backend
+        const MA_COLORS = __MA_COLORS__;
+        const MA_PERIODS = __MA_PERIODS__;
+        const STOCK_LIST = __STOCK_LIST__;
+        
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
         console.log('DEBUG: Destructuring Vue OK');
         createApp({
@@ -164,12 +217,17 @@
                 console.log('DEBUG: Vue setup() started');
                 const isSidebarOpen = ref(window.innerWidth > 768);
                 const currentMarket = ref('TW');
-                const currentStock = ref(__STOCK_LIST__[0]);
+                const currentStock = ref(STOCK_LIST[0]);
                 const loading = ref(false);
                 const error = ref(null);
                 const showDebug = ref(false);
                 const debugLogs = ref([]);
                 const debugPanel = ref(null);
+                
+                // Expose constants to template
+                const maColors = ref(MA_COLORS);
+                const maPeriods = ref(MA_PERIODS);
+
                 
                 // Yuanta-style new reactive variables
                 const currentCandle = ref(null);
@@ -214,7 +272,7 @@
                 
                 let abortController = null;
 
-                const filteredStocks = computed(() => __STOCK_LIST__.filter(s => s.market === currentMarket.value));
+                const filteredStocks = computed(() => STOCK_LIST.filter(s => s.market === currentMarket.value));
 
                 const chartOptions = (container) => ({
                     layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
@@ -270,7 +328,7 @@
                             maLines.forEach((line, i) => {
                                 const val = param.seriesData.get(line);
                                 if (val !== undefined) {
-                                    mas.push({ period: __MA_PERIODS__[i], value: val.value });
+                                    mas.push({ period: MA_PERIODS[i], value: val.value });
                                 }
                             });
                             currentMAs.value = mas;
@@ -380,7 +438,7 @@
                         maLines = [];
                         data.ma.forEach((m, i) => {
                             if(m.length) {
-                                const l = mainChart.addLineSeries({ color: __MA_COLORS__[i], lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+                                const l = mainChart.addLineSeries({ color: MA_COLORS[i], lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
                                 l.setData(m);
                                 maLines.push(l);
                             }
@@ -390,7 +448,7 @@
                         maLines.forEach((l, i) => {
                             if (data.ma[i]?.length > 0) {
                                 const lastMA = data.ma[i][data.ma[i].length - 1];
-                                mas.push({ period: __MA_PERIODS__[i], value: lastMA.value });
+                                mas.push({ period: MA_PERIODS[i], value: lastMA.value });
                             }
                         });
                         currentMAs.value = mas;
@@ -503,7 +561,8 @@
                     isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, 
                     chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer,
                     loading, error, showDebug, debugLogs, debugPanel,
-                    currentCandle, currentMAs, priceChange, priceChangePercent, formatVolume
+                    currentCandle, currentMAs, priceChange, priceChangePercent, formatVolume,
+                    maColors: MA_COLORS, maPeriods: MA_PERIODS
                 };
             }
         }).mount('#app');
