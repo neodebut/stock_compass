@@ -353,11 +353,11 @@
                 };
 
                 const loadStockData = async (stock) => {
-                    const requestId = Date.now();
-                    addLog(`🔵 SELECT: ${stock.symbol}`, 'log-success');
+                    const reqId = Math.random().toString(36).substring(7);
+                    addLog(`[${reqId}] 🔵 SELECT: ${stock.symbol}`, 'log-success');
                     
                     if (abortController) {
-                        addLog(`⚠️ Aborting previous request`, 'log-warn');
+                        addLog(`[${reqId}] ⚠️ Aborting previous request`, 'log-warn');
                         abortController.abort();
                     }
                     abortController = new AbortController();
@@ -367,12 +367,13 @@
                     const fetchStart = performance.now();
                     
                     try {
-                        addLog(`📡 FETCH: /api/stock/${stock.symbol}`);
-                        const res = await fetch(`/api/stock/${stock.symbol}`, { signal });
+                        addLog(`[${reqId}] 📡 FETCH: /api/stock/${stock.symbol}`);
+                        // Add timestamp to prevent caching
+                        const res = await fetch(`/api/stock/${stock.symbol}?t=${Date.now()}`, { signal });
                         const fetchEnd = performance.now();
-                        addLog(`✅ FETCH: ${(fetchEnd - fetchStart).toFixed(0)}ms`, 'log-success');
+                        addLog(`[${reqId}] ✅ FETCH DONE: ${(fetchEnd - fetchStart).toFixed(0)}ms`, 'log-success');
                         
-                        if (!res.ok) throw new Error("API Error");
+                        if (!res.ok) throw new Error(`API Error ${res.status}`);
                         
                         const parseStart = performance.now();
                         const data = await res.json();
@@ -477,9 +478,20 @@
                         
                         difLine.setData(data.macd.dif);
                         deaLine.setData(data.macd.dea);
-                        histSeries.setData(data.macd.histogram);
+                        // Force Taiwan Style colors in frontend to override cache
+                        histSeries.setData(data.macd.histogram.map(d => ({
+                            time: d.time,
+                            value: d.value,
+                            color: (d.value >= 0) ? '#EF5350' : '#26A69A'
+                        })));
                         
                         addLog(`🎨 RENDER: ${(performance.now() - renderStart).toFixed(0)}ms`, 'log-success');
+                        
+                        // Debug Memory if available
+                        if (performance.memory) {
+                            const mem = performance.memory;
+                            addLog(`💾 MEM: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB / ${(mem.jsHeapSizeLimit / 1048576).toFixed(1)}MB`);
+                        }
                         mainChart.timeScale().fitContent();
                         addLog(`✅ DONE: Total ${(performance.now() - fetchStart).toFixed(0)}ms`, 'log-success');
                     } catch (e) { 
