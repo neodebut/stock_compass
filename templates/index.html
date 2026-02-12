@@ -89,76 +89,53 @@
         <!-- Chart Area -->
         <div class="flex-1 flex flex-col h-full relative overflow-hidden" style="background-color: #0a0e17;">
             
-            <!-- New Header - Yuanta Style -->
-            <div class="border-b px-4 py-3 flex-shrink-0" style="background-color: #1a2332; border-color: #2a3a4a;">
-                <!-- Top Row: Stock Name & Price -->
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-3">
-                        <button @click="isSidebarOpen = !isSidebarOpen" class="text-gray-400 hover:text-white">
-                            <i class="fas fa-bars text-lg"></i>
-                        </button>
-                        <div v-if="currentStock">
-                            <div class="flex items-center gap-2">
-                                <span class="text-white text-xl font-bold">{{ currentStock.name }}</span>
-                                <span class="bg-purple-600 text-white text-xs px-2 py-0.5 rounded">市</span>
-                                <span class="text-gray-400 text-lg">{{ currentStock.symbol }}</span>
+            <!-- Compact Header -->
+            <div class="border-b px-4 py-2 flex-shrink-0" style="background-color: #1a2332; border-color: #2a3a4a;">
+                <!-- Top Row: Name, Price, OHLCV combined -->
+                <div class="flex flex-col gap-1">
+                    <!-- Row 1: Basic Info & Price -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <button @click="isSidebarOpen = !isSidebarOpen" class="text-gray-400 hover:text-white">
+                                <i class="fas fa-bars text-lg"></i>
+                            </button>
+                            <div v-if="currentStock" class="flex items-center gap-2">
+                                <span class="text-white text-lg font-bold">{{ currentStock.name }}</span>
+                                <span class="text-gray-400 text-sm">{{ currentStock.symbol }}</span>
                             </div>
                         </div>
-                    </div>
-                    <div v-if="currentCandle" class="text-right">
-                        <div class="text-3xl font-bold" :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
-                            {{ currentCandle.close.toFixed(2) }}
-                        </div>
-                        <div class="flex items-center justify-end gap-2 text-sm">
-                            <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
-                                <i v-if="priceChange >= 0" class="fas fa-caret-up"></i>
-                                <i v-else class="fas fa-caret-down"></i>
-                                {{ Math.abs(priceChange).toFixed(2) }}
-                            </span>
-                            <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
-                                {{ priceChangePercent.toFixed(2) }}%
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Info Dashboard - OHLCV -->
-                <div v-if="currentCandle" class="rounded-lg p-3 mt-2" style="background-color: #0f1419;">
-                    <div class="grid grid-cols-6 gap-4 text-center">
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">日期</div>
-                            <div class="text-white text-sm">{{ currentCandle.time }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">開</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.open.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">高</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.high.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">低</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.low.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">收</div>
-                            <div :class="currentCandle.close >= currentCandle.open ? 'text-red-400' : 'text-green-400'" class="text-sm font-mono font-bold">
+                        
+                        <div v-if="currentCandle" class="flex items-center gap-4">
+                            <div class="text-2xl font-bold" :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
                                 {{ currentCandle.close.toFixed(2) }}
                             </div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">量</div>
-                            <div class="text-yellow-400 text-sm font-mono">{{ formatVolume(currentCandle.volume) }}</div>
+                            <div class="flex flex-col items-end text-xs">
+                                <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
+                                    {{ priceChange >= 0 ? '▲' : '▼' }} {{ Math.abs(priceChange).toFixed(2) }}
+                                </span>
+                                <span :class="priceChange >= 0 ? 'text-red-500' : 'text-green-500'">
+                                    {{ priceChangePercent.toFixed(2) }}%
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- MA Values Row -->
-                <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 mt-2 px-2">
-                    <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1 text-xs">
-                        <span :style="{ color: maColors[i] }">MA{{ maPeriods[i] }}</span>
-                        <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
+
+                    <!-- Row 2: OHLCV (Horizontal) -->
+                    <div v-if="currentCandle" class="flex items-center gap-4 text-xs text-gray-300 font-mono bg-[#0f1419] p-1 rounded" style="background-color: #0f1419;">
+                        <div><span class="text-gray-500">D:</span> {{ currentCandle.time }}</div>
+                        <div><span class="text-gray-500">O:</span> <span class="text-white">{{ currentCandle.open.toFixed(2) }}</span></div>
+                        <div><span class="text-gray-500">H:</span> <span class="text-red-400">{{ currentCandle.high.toFixed(2) }}</span></div>
+                        <div><span class="text-gray-500">L:</span> <span class="text-green-400">{{ currentCandle.low.toFixed(2) }}</span></div>
+                        <div><span class="text-gray-500">C:</span> <span :class="currentCandle.close >= currentCandle.open ? 'text-red-400' : 'text-green-400'">{{ currentCandle.close.toFixed(2) }}</span></div>
+                        <div><span class="text-gray-500">V:</span> <span class="text-yellow-400">{{ formatVolume(currentCandle.volume) }}</span></div>
+                    </div>
+                    
+                    <!-- Row 3: MA Values -->
+                    <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 text-xs">
+                        <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1">
+                            <span :style="{ color: maColors[i] }">MA{{ maPeriods[i] }}:</span>
+                            <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
+                        </div>
                     </div>
                 </div>
             </div>

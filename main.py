@@ -450,8 +450,8 @@ def refresh_cache():
                 
                 optimized_result = {
                     "symbol": symbol,
-                    "dates": dates,
-                    "opens": opens, "highs": highs, "lows": lows, "closes": closes,
+                    "dates": dates[-LIMIT:],
+                    "opens": opens[-LIMIT:], "highs": highs[-LIMIT:], "lows": lows[-LIMIT:], "closes": closes[-LIMIT:],
                     "ma": ma_values,
                     "rsi": rsi_values,
                     "kd": {"k": k_values, "d": d_values},
@@ -460,7 +460,8 @@ def refresh_cache():
                 }
                 
                 STOCK_DATA_CACHE[symbol] = optimized_result
-                print(f"  [{symbol}] Cached {len(rows)} records (Optimized)")
+                last_date = dates[-1] if dates else "None"
+                print(f"  [{symbol}] Cached {len(dates)} records (Optimized), Latest: {last_date}")
                 
                 # Sleep briefly to yield CPU
                 time.sleep(0.1)
