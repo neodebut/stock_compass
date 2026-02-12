@@ -9,7 +9,6 @@ import os
 import requests
 import random
 import time
-import yfinance as yf
 from datetime import datetime, timedelta
 from fake_useragent import UserAgent
 from sqlalchemy import create_engine, Column, String, Float, Integer, Date
@@ -185,67 +184,91 @@ def calculate_all_indicators(df):
     
     return result
 
-# --- Data Fetching Logic (Restored) ---
+# FinMind Token (from user)
+FINMIND_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMi0xMiAwOTozMjoxNSIsInVzZXJfaWQiOiJuZW9kZWJ1dCIsImVtYWlsIjoibmVvZGVidXRAZ21haWwuY29tIiwiaXAiOiIyMjMuMTQxLjIxNi4xMSJ9.QJ_dj-AD03Ex14Ir7dUQiFfnJBZMrMpo-h6oNmqEo4M"
+
+# --- Data Fetching Logic ---
 def fetch_stock_data(symbol_info):
-    """Fetch stock data: Try Yahoo Finance first, then Stooq"""
+    """Fetch stock data using FinMind API"""
     symbol = symbol_info['symbol']
     google_symbol = symbol_info['google_symbol']
     
-    # 1. Try Yahoo Finance (Preferred for real-time data)
-    try:
-        if "TPE:" in google_symbol:
-            yf_ticker = symbol + ".TW"
-        elif "NASDAQ:" in google_symbol:
-            yf_ticker = symbol
-        else:
-            yf_ticker = symbol
-            
-        print(f"[{symbol}] Fetching from Yahoo Finance ({yf_ticker})...")
-        ticker = yf.Ticker(yf_ticker)
-        df = ticker.history(period="5y")
-        
-        if not df.empty:
-            records = []
-            for date, row in df.iterrows():
-                records.append({
-                    "symbol": symbol,
-                    "date": date.date(),
-                    "open": float(row['Open']),
-                    "high": float(row['High']),
-                    "low": float(row['Low']),
-                    "close": float(row['Close']),
-                    "volume": int(row['Volume'])
-                })
-            print(f"[{symbol}] Yahoo success! Got {len(records)} records, latest: {records[-1]['date']}")
-            return records
-        else:
-            print(f"[{symbol}] Yahoo returned EMPTY data")
-    except Exception as e:
-        print(f"[{symbol}] Yahoo Finance ERROR: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-
-    # 2. Fallback to Stooq
-    # Map to Stooq format
+    # Determine dataset and data_id for FinMind
     if "TPE:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".TW"
-    elif "NASDAQ:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".US"
-    elif "NYSE:" in google_symbol:
-        stooq_code = google_symbol.split(":")[1] + ".US"
+        dataset = "TaiwanStockPrice"
+        data_id = symbol
+    elif "NASDAQ:" in google_symbol or "NYSE:" in google_symbol:
+        dataset = "USStockPrice"
+        data_id = symbol
     else:
-        stooq_code = google_symbol
-
-    url = f"https://stooq.com/q/d/l/?s={stooq_code}&i=d"
-    print(f"[{symbol}] Fallback fetching from Stooq {url}...")
+        print(f"[{symbol}] Unknown market type for FinMind")
+        return None
+    
+    url = "https://api.finmindtrade.com/api/v4/data"
+    params = {
+        "dataset": dataset,
+        "data_id": data_id,
+        "token": FINMIND_TOKEN
+    }
+    
+    print(f"[{symbol}] Fetching from FinMind ({dataset})...")
     
     try:
-        headers = {'User-Agent': UserAgent().random}
-        res = requests.get(url, headers=headers, timeout=15)
+        res = requests.get(url, params=params, timeout=30)
         
         if res.status_code != 200:
-            print(f"[{symbol}] Failed: HTTP {res.status_code}")
+            print(f"[{symbol}] FinMind Failed: HTTP {res.status_code}")
             return None
+        
+        data = res.json()
+        
+        if data.get("msg") != "success" or not data.get("data"):
+            print(f"[{symbol}] FinMind API error: {data.get('msg')}")
+            return None
+        
+        records = []
+        for row in data["data"]:
+            # FinMind date format: "2026-02-11"
+            date_str = row.get("date", "")
+            if not date_str:
+                continue
+                
+            # Handle different field names for TW vs US stocks
+            if dataset == "TaiwanStockPrice":
+                # Taiwan: open, max, min, close, Trading_Volume
+                records.append({
+                    "symbol": symbol,
+                    "date": datetime.strptime(date_str, "%Y-%m-%d").date(),
+                    "open": float(row.get("open", 0)),
+                    "high": float(row.get("max", row.get("high", 0))),
+                    "low": float(row.get("min", row.get("low", 0))),
+                    "close": float(row.get("close", 0)),
+                    "volume": int(row.get("Trading_Volume", 0))
+                })
+            else:
+                # US: Open, High, Low, Close, Volume
+                records.append({
+                    "symbol": symbol,
+                    "date": datetime.strptime(date_str, "%Y-%m-%d").date(),
+                    "open": float(row.get("Open", row.get("open", 0))),
+                    "high": float(row.get("High", row.get("high", 0))),
+                    "low": float(row.get("Low", row.get("low", 0))),
+                    "close": float(row.get("Close", row.get("close", 0))),
+                    "volume": int(row.get("Volume", row.get("Trading_Volume", 0)))
+                })
+        
+        if records:
+            print(f"[{symbol}] FinMind success! Got {len(records)} records, latest: {records[-1]['date']}")
+            return records
+        else:
+            print(f"[{symbol}] FinMind returned no records")
+            return None
+            
+    except Exception as e:
+        print(f"[{symbol}] FinMind ERROR: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
             
         if 'text/html' in res.headers.get('Content-Type', ''):
             print(f"[{symbol}] Blocked (HTML response)")
