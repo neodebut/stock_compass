@@ -133,12 +133,13 @@
                 </div>
                 -->
                 
-                <!-- MA Values Row (Temporarily Disabled) -->
-                <!--
+                <!-- MA Values Row -->
                 <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 mt-2 px-2">
-                   ... (Removed for debug)
+                    <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1 text-xs">
+                        <span :style="{ color: __MA_COLORS__[i] }">MA{{ __MA_PERIODS__[i] }}</span>
+                        <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
+                    </div>
                 </div>
-                -->
             </div>
             
             <div class="flex items-center justify-center h-full text-white">
