@@ -43,7 +43,8 @@ STOCK_LIST = [
 ]
 
 # --- Database Setup (SQLite) ---
-SQLALCHEMY_DATABASE_URL = "sqlite:///./stocks.db"
+# Using updated database with data up to 2026-02-11
+SQLALCHEMY_DATABASE_URL = "sqlite:///./stocks_20250211.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
 # Enable Write-Ahead Logging (WAL) for better concurrency
