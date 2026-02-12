@@ -614,14 +614,14 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <!-- Chart Area -->
-        <div class="flex-1 flex flex-col h-full bg-[#0a0e17] relative overflow-hidden">
+        <div class="flex-1 flex flex-col h-full relative overflow-hidden" style="background-color: #0a0e17;">
             <!-- DEBUG: Always visible status -->
             <div style="position: absolute; top: 0; left: 0; right: 0; background: red; color: white; z-index: 99999; padding: 10px;">
                 DEBUG: Vue is running | Stock: {{ currentStock?.symbol || 'NONE' }} | Market: {{ currentMarket }}
             </div>
             
             <!-- New Header - Yuanta Style -->
-            <div class="bg-[#1a2332] border-b border-[#2a3a4a] px-4 py-3 flex-shrink-0">
+            <div class="border-b px-4 py-3 flex-shrink-0" style="background-color: #1a2332; border-color: #2a3a4a;">
                 <!-- Top Row: Stock Name & Price -->
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-3">
@@ -654,7 +654,7 @@ HTML_TEMPLATE = """
                 </div>
                 
                 <!-- Info Dashboard - OHLCV -->
-                <div v-if="currentCandle" class="bg-[#0f1419] rounded-lg p-3 mt-2">
+                <div v-if="currentCandle" class="rounded-lg p-3 mt-2" style="background-color: #0f1419;">
                     <div class="grid grid-cols-6 gap-4 text-center">
                         <div>
                             <div class="text-gray-500 text-xs mb-1">日期</div>
@@ -700,25 +700,25 @@ HTML_TEMPLATE = """
             </div>
             
             <!-- Charts Container (Scrollable) -->
-            <div class="flex-1 overflow-y-auto bg-[#0a0e17]" ref="chartsScrollContainer">
+            <div class="flex-1 overflow-y-auto" ref="chartsScrollContainer" style="background-color: #0a0e17;">
                 <!-- Main Candlestick Chart -->
                 <div class="relative" style="height: 50%;">
                     <div ref="mainChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- RSI Chart -->
-                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
                     <div ref="rsiChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- KD Chart -->
-                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
                     <div ref="kdChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- BIAS Chart -->
-                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
                     <div ref="biasChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- MACD Chart -->
-                <div class="relative border-t border-[#1a2332]" style="height: 12.5%;">
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
                     <div ref="macdChartContainer" class="absolute inset-0"></div>
                 </div>
             </div>
