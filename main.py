@@ -604,8 +604,8 @@ HTML_TEMPLATE = """
         <div :class="['bg-neutral-900 border-r border-neutral-800 flex flex-col z-20 h-full flex-shrink-0', isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden']">
             <div class="p-4 border-b border-neutral-800"><h1 class="text-xl font-bold text-blue-400">StockView</h1></div>
             <div class="flex border-b border-neutral-800">
-                <button @click="currentMarket = 'TW'" :class="['flex-1 py-3', currentMarket === 'TW' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400']">🇹🇼 台股</button>
-                <button @click="currentMarket = 'US'" :class="['flex-1 py-3', currentMarket === 'US' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400']">🇺🇸 美股</button>
+                <button @click="currentMarket = 'TW'" :class="['flex-1 py-3', currentMarket === 'TW' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400']">TW 台股</button>
+                <button @click="currentMarket = 'US'" :class="['flex-1 py-3', currentMarket === 'US' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400']">US 美股</button>
             </div>
             <div class="flex-1 overflow-y-auto">
                 <div v-for="stock in filteredStocks" :key="stock.symbol" @click="selectStock(stock)" :class="['p-3 mx-2 mb-1 rounded cursor-pointer flex justify-between', currentStock?.symbol === stock.symbol ? 'stock-item active' : 'hover:bg-neutral-800 text-gray-300']">
