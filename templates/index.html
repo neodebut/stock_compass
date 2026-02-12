@@ -126,45 +126,19 @@
                     </div>
                 </div>
                 
-                <!-- Info Dashboard - OHLCV -->
+                <!-- Info Dashboard - OHLCV (Temporarily Disabled) -->
+                <!-- 
                 <div v-if="currentCandle" class="rounded-lg p-3 mt-2" style="background-color: #0f1419;">
-                    <div class="grid grid-cols-6 gap-4 text-center">
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">日期</div>
-                            <div class="text-white text-sm">{{ currentCandle.time }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">開</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.open.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">高</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.high.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">低</div>
-                            <div class="text-red-400 text-sm font-mono">{{ currentCandle.low.toFixed(2) }}</div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">收</div>
-                            <div :class="currentCandle.close >= currentCandle.open ? 'text-red-400' : 'text-green-400'" class="text-sm font-mono font-bold">
-                                {{ currentCandle.close.toFixed(2) }}
-                            </div>
-                        </div>
-                        <div>
-                            <div class="text-gray-500 text-xs mb-1">量</div>
-                            <div class="text-yellow-400 text-sm font-mono">{{ formatVolume(currentCandle.volume) }}</div>
-                        </div>
-                    </div>
+                   ... (Removed for debug)
                 </div>
+                -->
                 
-                <!-- MA Values Row -->
+                <!-- MA Values Row (Temporarily Disabled) -->
+                <!--
                 <div v-if="currentMAs.length > 0" class="flex flex-wrap gap-3 mt-2 px-2">
-                    <div v-for="(ma, i) in currentMAs" :key="i" class="flex items-center gap-1 text-xs">
-                        <span :style="{ color: __MA_COLORS__[i] }">MA{{ __MA_PERIODS__[i] }}</span>
-                        <span class="text-white font-mono">{{ ma.value?.toFixed(2) || '--' }}</span>
-                    </div>
+                   ... (Removed for debug)
                 </div>
+                -->
             </div>
             
             <div class="flex items-center justify-center h-full text-white">
