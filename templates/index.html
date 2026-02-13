@@ -77,7 +77,7 @@
         <div :class="['bg-neutral-900 border-r border-neutral-800 flex flex-col z-20 h-full flex-shrink-0', isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden']">
             <div class="p-4 border-b border-neutral-800">
                 <h1 class="text-xl font-bold text-blue-400">StockView</h1>
-                <div class="text-xs text-gray-500 mt-1">v0.1</div>
+                <div class="text-xs text-gray-500 mt-1">v0.2 - Crosshair Sync + Right Lock</div>
             </div>
             <div class="flex border-b border-neutral-800">
                 <button @click="currentMarket = 'TW'" :class="['flex-1 py-3', currentMarket === 'TW' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400']">TW 台股</button>
@@ -185,12 +185,75 @@
         </div>
     </div>
     <script>
-        console.log('DEBUG: Script tag found, Vue available?', typeof Vue);
+        console.log('DEBUG: StockView Pro v0.2 loading...');
         
-        // Define constants injected by backend
-        const MA_COLORS = __MA_COLORS__;
-        const MA_PERIODS = __MA_PERIODS__;
-        const STOCK_LIST = __STOCK_LIST__;
+        // ============================================
+        // v0.2 Core: Chart State Manager
+        // Rule 1: Global Crosshair Synchronization
+        // Rule 2: Right Edge Lock - No Whitespace
+        // ============================================
+        const createChartStateManager = () => ({
+            state: {
+                crosshair: { index: null, timestamp: null, isLocked: false },
+                viewport: { 
+                    candleWidth: 10, 
+                    visibleCount: 150, 
+                    rightOffset: 0,
+                    dataRange: { start: 0, end: 0 }
+                }
+            },
+            data: [],
+            subscribers: [],
+            
+            setData(data) {
+                this.data = data;
+                this.enforceRightAlignment();
+            },
+            
+            // Rule 1: Set crosshair index and notify all charts
+            setCrosshairIndex(index) {
+                if (index < 0 || index >= this.data.length) return;
+                this.state.crosshair.index = index;
+                this.state.crosshair.timestamp = this.data[index]?.time;
+                this.state.crosshair.isLocked = true;
+                this.notify('crosshair:move', { index, timestamp: this.state.crosshair.timestamp });
+            },
+            
+            clearCrosshair() {
+                this.state.crosshair.index = null;
+                this.state.crosshair.isLocked = false;
+                this.notify('crosshair:clear', {});
+            },
+            
+            // Rule 2: Enforce right alignment
+            enforceRightAlignment() {
+                if (!this.data.length) return;
+                const endIndex = this.data.length - 1;
+                this.state.viewport.dataRange.end = endIndex;
+                this.state.viewport.dataRange.start = Math.max(0, endIndex - this.state.viewport.visibleCount + 1);
+                this.state.viewport.rightOffset = 0;
+                this.notify('viewport:align', this.state.viewport);
+            },
+            
+            // Rule 2: Zoom with right anchor
+            zoom(factor, minWidth = 2, maxWidth = 50) {
+                const newWidth = Math.max(minWidth, Math.min(this.state.viewport.candleWidth * factor, maxWidth));
+                this.state.viewport.candleWidth = newWidth;
+                this.enforceRightAlignment();
+                this.notify('viewport:zoom', this.state.viewport);
+            },
+            
+            subscribe(callback) {
+                this.subscribers.push(callback);
+            },
+            
+            notify(event, payload) {
+                this.subscribers.forEach(cb => cb(event, payload));
+            }
+        });
+        
+        // Global state manager instance
+        const chartState = createChartStateManager();
         
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
         console.log('DEBUG: Destructuring Vue OK');
