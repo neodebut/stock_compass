@@ -17,8 +17,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 
 # --- Configuration ---
+# Version: 0.1 (StockView Pro)
 # Build Timestamp: 2026-02-08 16:19 UTC (Force Rebuild)
 # EMA參數: EMA1~EMA6, EMA799, EMA1292 (依據波浪理論技術分析參數表)
+
+APP_VERSION = "0.1"
+APP_NAME = "StockView Pro"
 MA_PERIODS = [17, 45, 117, 189, 305, 494, 799, 1292]
 MA_COLORS = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#C2F970', '#9B59B6', '#3498DB']
 
