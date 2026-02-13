@@ -255,6 +255,11 @@
         // Global state manager instance
         const chartState = createChartStateManager();
         
+        // Define constants injected by backend
+        const MA_COLORS = __MA_COLORS__;
+        const MA_PERIODS = __MA_PERIODS__;
+        const STOCK_LIST = __STOCK_LIST__;
+        
         const { createApp, ref, computed, onMounted, nextTick } = Vue;
         console.log('DEBUG: Destructuring Vue OK');
         createApp({
