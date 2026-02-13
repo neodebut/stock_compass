@@ -187,60 +187,26 @@
     <script>
         console.log('DEBUG: StockView Pro v0.2 loading...');
         
-        // ============================================
-        // v0.2 Core: Chart State Manager
-        // Rule 1: Global Crosshair Synchronization
-        // Rule 2: Right Edge Lock - No Whitespace
-        // ============================================
+        // v0.2: Simplified Chart State Manager (to prevent freeze)
         const createChartStateManager = () => ({
             state: {
                 crosshair: { index: null, timestamp: null, isLocked: false },
                 viewport: { 
                     candleWidth: 10, 
-                    visibleCount: 150, 
-                    rightOffset: 0,
-                    dataRange: { start: 0, end: 0 }
+                    visibleCount: 100, 
+                    rightOffset: 0
                 }
             },
-            data: [],
             subscribers: [],
             
-            setData(data) {
-                this.data = data;
-                this.enforceRightAlignment();
-            },
-            
-            // Rule 1: Set crosshair index and notify all charts
             setCrosshairIndex(index) {
-                if (index < 0 || index >= this.data.length) return;
                 this.state.crosshair.index = index;
-                this.state.crosshair.timestamp = this.data[index]?.time;
-                this.state.crosshair.isLocked = true;
-                this.notify('crosshair:move', { index, timestamp: this.state.crosshair.timestamp });
+                this.notify('crosshair:move', { index });
             },
             
             clearCrosshair() {
                 this.state.crosshair.index = null;
-                this.state.crosshair.isLocked = false;
                 this.notify('crosshair:clear', {});
-            },
-            
-            // Rule 2: Enforce right alignment
-            enforceRightAlignment() {
-                if (!this.data.length) return;
-                const endIndex = this.data.length - 1;
-                this.state.viewport.dataRange.end = endIndex;
-                this.state.viewport.dataRange.start = Math.max(0, endIndex - this.state.viewport.visibleCount + 1);
-                this.state.viewport.rightOffset = 0;
-                this.notify('viewport:align', this.state.viewport);
-            },
-            
-            // Rule 2: Zoom with right anchor
-            zoom(factor, minWidth = 2, maxWidth = 50) {
-                const newWidth = Math.max(minWidth, Math.min(this.state.viewport.candleWidth * factor, maxWidth));
-                this.state.viewport.candleWidth = newWidth;
-                this.enforceRightAlignment();
-                this.notify('viewport:zoom', this.state.viewport);
             },
             
             subscribe(callback) {

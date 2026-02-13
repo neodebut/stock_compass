@@ -527,19 +527,30 @@ def load_seed_data():
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    load_seed_data()
+    # Only load seed data if DB is empty - skip heavy operations on startup
+    print(">>> Checking database...")
+    db = SessionLocal()
+    try:
+        stock_count = db.query(StockData).count()
+        if stock_count == 0:
+            print(">>> DB empty, loading seed data...")
+            load_seed_data()
+        else:
+            print(f">>> DB already has {stock_count} records, skipping seed load")
+    finally:
+        db.close()
     
-    # Update data on startup to ensure freshness after deploy
-    print(">>> Running startup data update...")
-    update_database()
+    # Run heavy operations in background thread to avoid blocking startup
+    print(">>> Starting background cache refresh...")
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, lambda: refresh_cache())
     
-    refresh_cache()
-    
+    # Schedule daily update
     scheduler = BackgroundScheduler()
     def job():
         update_database()
         refresh_cache()
-        
     scheduler.add_job(job, 'cron', hour=22)
     scheduler.start()
     
@@ -1222,9 +1233,9 @@ def query_and_calculate(symbol):
         
         indicators = calculate_all_indicators(df)
         
-        # Limit to last 2000 records (~8 years) for frontend performance
+        # Limit to last 500 records (~2 years) for INITIAL frontend load to prevent browser freeze
         # Note: We calculated indicators using full history for accuracy
-        LIMIT = 2000
+        LIMIT = 500
         
         dates = dates[-LIMIT:]
         opens = opens[-LIMIT:]
