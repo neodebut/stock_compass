@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockView Pro</title>
+    <title>StockCompass</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -76,7 +76,7 @@
         <!-- Sidebar -->
         <div :class="['bg-neutral-900 border-r border-neutral-800 flex flex-col z-20 h-full flex-shrink-0', isSidebarOpen ? 'w-80' : 'w-0 overflow-hidden']">
             <div class="p-4 border-b border-neutral-800">
-                <h1 class="text-xl font-bold text-blue-400">StockView</h1>
+                <h1 class="text-xl font-bold text-blue-400">StockCompass</h1>
                 <div class="text-xs text-gray-500 mt-1">v0.2 - Crosshair Sync + Right Lock</div>
             </div>
             <div class="flex border-b border-neutral-800">
@@ -185,7 +185,7 @@
         </div>
     </div>
     <script>
-        console.log('DEBUG: StockView Pro v0.2 loading...');
+        console.log('DEBUG: StockCompass v0.2 loading...');
         
         // v0.2: Simplified Chart State Manager (to prevent freeze)
         const createChartStateManager = () => ({
