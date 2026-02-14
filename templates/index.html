@@ -293,8 +293,14 @@
                 const chartOptions = (container) => ({
                     layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
                     grid: { vertLines: { color: '#2B2B43' }, horzLines: { color: '#2B2B43' } },
-                    timeScale: { borderColor: '#485c7b', timeVisible: true, visible: true },
-                    rightPriceScale: { borderColor: '#485c7b' },
+                    timeScale: { 
+                        borderColor: '#485c7b', 
+                        timeVisible: true, 
+                        visible: true,
+                        fixRightEdge: true,
+                        rightOffset: 0
+                    },
+                    rightPriceScale: { borderColor: '#485c7b', minimumWidth: 60, width: 60 },
                     crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
                 });
 
@@ -314,25 +320,53 @@
                     // RSI chart
                     rsiChart = LightweightCharts.createChart(rsiChartContainer.value, {
                         ...chartOptions(),
-                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } }
+                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+                        timeScale: { 
+                            visible: true, 
+                            timeVisible: true,
+                            borderColor: '#485c7b',
+                            fixRightEdge: true,
+                            rightOffset: 0
+                        }
                     });
                     
                     // KD chart
                     kdChart = LightweightCharts.createChart(kdChartContainer.value, {
                         ...chartOptions(),
-                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } }
+                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+                        timeScale: { 
+                            visible: true, 
+                            timeVisible: true,
+                            borderColor: '#485c7b',
+                            fixRightEdge: true,
+                            rightOffset: 0
+                        }
                     });
                     
                     // BIAS chart
                     biasChart = LightweightCharts.createChart(biasChartContainer.value, {
                         ...chartOptions(),
-                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } }
+                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } },
+                        timeScale: { 
+                            visible: true, 
+                            timeVisible: true,
+                            borderColor: '#485c7b',
+                            fixRightEdge: true,
+                            rightOffset: 0
+                        }
                     });
                     
                     // MACD chart
                     macdChart = LightweightCharts.createChart(macdChartContainer.value, {
                         ...chartOptions(),
-                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } }
+                        rightPriceScale: { scaleMargins: { top: 0.2, bottom: 0.2 } },
+                        timeScale: { 
+                            visible: true, 
+                            timeVisible: true,
+                            borderColor: '#485c7b',
+                            fixRightEdge: true,
+                            rightOffset: 0
+                        }
                     });
                     
                     // Crosshair Move Handler - Yuanta Style
