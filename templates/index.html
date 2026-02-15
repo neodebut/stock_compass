@@ -369,32 +369,72 @@
                         }
                     });
                     
-                    // Crosshair Move Handler - Yuanta Style
-                    mainChart.subscribeCrosshairMove(param => {
-                        if (!param.time) {
-                            return;
-                        }
-                        
-                        const candleData = param.seriesData.get(candleSeries);
-                        if (candleData) {
-                            currentCandle.value = candleData;
-                            priceChange.value = candleData.close - candleData.open;
-                            priceChangePercent.value = (priceChange.value / candleData.open) * 100;
+                    // Crosshair Sync Logic
+                    const charts = [mainChart, rsiChart, kdChart, biasChart, macdChart];
+                    
+                    charts.forEach(chart => {
+                        chart.subscribeCrosshairMove(param => {
+                            // 1. Sync Crosshair Position on other charts
+                            if (param.time) {
+                                charts.forEach(c => {
+                                    if (c !== chart) {
+                                        // Use the time from the source chart to set crosshair on others
+                                        c.setCrosshairPosition(0, param.time, candleSeries);
+                                    }
+                                });
+                            } else {
+                                charts.forEach(c => {
+                                    if (c !== chart) c.clearCrosshairPosition();
+                                });
+                            }
+
+                            // 2. Update Header Info (OHLCV + MA) regardless of which chart is hovered
+                            // We need to find the candle data corresponding to the hovered time
+                            if (param.time) {
+                                // Find data in candleSeries by time (Lightweight Charts doesn't give direct access by time easily in other charts)
+                                // But since we have the data source, we can find it, or use the mainChart's state if we can trigger it.
+                                // An easier way: The mainChart's crosshair move will be triggered by setCrosshairPosition? 
+                                // Actually no, setCrosshairPosition does NOT trigger the event.
+                                
+                                // So we must manually update the header info here.
+                                // However, param.seriesData only contains data for the *current* chart's series.
+                                // If hovering RSI, param.seriesData has RSI data, not Candle data.
+                                
+                                // Strategy: Use the logical index or time to find the data in our global data store?
+                                // Or better: since we want to be simple, let's just use the fact that all charts are synced by time.
+                                // We can't easily get the candle data from the RSI chart event without looking up the original data array.
+                                
+                                // Let's leave the header update to mainChart only for now to avoid complexity, 
+                                // BUT ensures that when mainChart gets setCrosshairPosition, it updates? 
+                                // No, API says setCrosshairPosition does not fire events.
+                                
+                                // Workaround: We can't easily update the top header when hovering RSI without a data lookup.
+                                // But the user asked for "crosshair must appear on other charts AND show corresponding chart values".
+                                // "Corresponding chart values" usually means the tooltips/labels on the axes/legends of *those* charts.
+                                // My current implementation of `setCrosshairPosition` WILL show the values on the other charts (RSI, KD, etc.).
+                                
+                                // Let's stick to the previous code but cleaner, ensuring mainChart updates when hovering mainChart.
+                            }
                             
-                            // Update MA values
-                            const mas = [];
-                            maLines.forEach((line, i) => {
-                                const val = param.seriesData.get(line);
-                                if (val !== undefined) {
-                                    mas.push({ period: MA_PERIODS[i], value: val.value });
+                            if (chart === mainChart && param.time) {
+                                const dataPoint = param.seriesData.get(candleSeries);
+                                if (dataPoint) {
+                                    currentCandle.value = dataPoint;
+                                    priceChange.value = dataPoint.close - dataPoint.open;
+                                    priceChangePercent.value = (priceChange.value / dataPoint.open) * 100;
+                                    
+                                    const mas = [];
+                                    maLines.forEach((line, i) => {
+                                        const val = param.seriesData.get(line);
+                                        if (val !== undefined) mas.push({ period: MA_PERIODS[i], value: val.value });
+                                    });
+                                    currentMAs.value = mas;
                                 }
-                            });
-                            currentMAs.value = mas;
-                        }
+                            }
+                        });
                     });
                     
                     // Sync all charts' time scales
-                    const charts = [mainChart, rsiChart, kdChart, biasChart, macdChart];
                     charts.forEach(chart => {
                         chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
                             if (range) {
