@@ -8,18 +8,67 @@
 
 ### 方式一：GitHub Actions（推薦）
 
-已建立 `.github/workflows/daily-update.yml`，會自動：
-1. 每日 UTC 23:00 (台灣時間 07:00+1) 執行
+**步驟 1：建立 Workflow 檔案**
+
+在 Repository 中建立 `.github/workflows/daily-update.yml`：
+
+```yaml
+name: Daily Stock Data Update
+
+on:
+  schedule:
+    # 週一到週六 07:00 UTC+8 = 前一天 23:00 UTC
+    - cron: '0 23 * * 0-5'
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: pip install requests
+        
+    - name: Run incremental update
+      run: python3 update_incremental.py
+      env:
+        FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        DB_PATH: ./stocks.db
+        
+    - name: Configure Git
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        
+    - name: Copy and commit database
+      run: |
+        cp stocks.db stocks_20250211.db
+        git add stocks.db stocks_20250211.db
+        git diff --quiet && git diff --staged --quiet || (git commit -m "📊 Auto-update stock data [$(date +%Y-%m-%d)]" && git push)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**步驟 2：設定 Secrets**
+
+在 GitHub Repository Settings > Secrets > Actions 中設定：
+- `FINMIND_TOKEN`: 您的 FinMind API Token
+- `GITHUB_TOKEN`: 自動提供
+
+**功能說明：**
+1. 每日 UTC 23:00 (台灣時間 07:00+1) 自動執行
 2. 從 FinMind API 拉取最新資料
 3. 更新 SQLite 資料庫
 4. 自動推送到 GitHub
 5. Zeabur 會自動重新部署
-
-**需要設定 Secrets:**
-```bash
-# 在 GitHub Repository Settings > Secrets > Actions 中設定：
-FINMIND_TOKEN=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
-```
 
 ### 方式二：系統 Cron（Linux/macOS）
 
