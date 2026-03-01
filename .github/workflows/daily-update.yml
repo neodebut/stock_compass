@@ -1,0 +1,28 @@
+name: Daily Stock Data Update
+
+on:
+  schedule:
+    - cron: '0 23 * * 0-5'  # 週一~週六 UTC 23:00（台灣 07:00+1）
+  workflow_dispatch:
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - run: pip install requests
+    - run: python3 update_incremental.py
+      env:
+        FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        DB_PATH: ./stocks.db
+    - run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        cp stocks.db stocks_20250211.db
+        git add stocks.db stocks_20250211.db
+        git commit -m "📊 Auto-update $(date +%Y-%m-%d)" && git push || echo "No changes"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
