@@ -28,7 +28,7 @@ STOCK_LIST = [
     {"symbol": "AMD", "data_id": "AMD", "name": "AMD", "market": "US", "dataset": "USStockPrice"},
 ]
 
-DB_PATH = "/home/node/.openclaw/workspace/projects/stock_compass/stocks.db"
+DB_PATH = "/home/node/.openclaw/workspace/stock_compass/stocks.db"
 
 def init_database():
     """初始化資料庫"""
