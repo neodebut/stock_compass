@@ -437,22 +437,22 @@ def refresh_cache():
                 # Optimize structure
                 ma_values = []
                 for ma_line in indicators['ma']:
-                    ma_values.append([p['value'] for p in ma_line])
+                    ma_values.append([p['value'] for p in ma_line][-LIMIT:])
                     
                 rsi_values = []
                 for rsi_line in indicators['rsi']:
-                    rsi_values.append([p['value'] for p in rsi_line])
+                    rsi_values.append([p['value'] for p in rsi_line][-LIMIT:])
                     
-                k_values = [p['value'] for p in indicators['kd']['k']]
-                d_values = [p['value'] for p in indicators['kd']['d']]
+                k_values = [p['value'] for p in indicators['kd']['k']][-LIMIT:]
+                d_values = [p['value'] for p in indicators['kd']['d']][-LIMIT:]
                 
                 bias_values = []
                 for bias_line in indicators['bias']:
-                    bias_values.append([p['value'] for p in bias_line])
+                    bias_values.append([p['value'] for p in bias_line][-LIMIT:])
                     
-                dif_values = [p['value'] for p in indicators['macd']['dif']]
-                dea_values = [p['value'] for p in indicators['macd']['dea']]
-                hist_values = [p['value'] for p in indicators['macd']['histogram']]
+                dif_values = [p['value'] for p in indicators['macd']['dif']][-LIMIT:]
+                dea_values = [p['value'] for p in indicators['macd']['dea']][-LIMIT:]
+                hist_values = [p['value'] for p in indicators['macd']['histogram']][-LIMIT:]
                 
                 optimized_result = {
                     "symbol": symbol,
