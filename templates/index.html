@@ -146,24 +146,28 @@
             <!-- Charts Container (Scrollable) -->
             <div class="flex-1 overflow-y-auto" ref="chartsScrollContainer" style="background-color: #0a0e17;">
                 <!-- Main Candlestick Chart -->
-                <div class="relative" style="height: 50%;">
+                <div class="relative" style="height: 45%;">
                     <div ref="mainChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- RSI Chart -->
-                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                <div class="relative border-t" style="height: 11%; border-color: #1a2332;">
                     <div ref="rsiChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- KD Chart -->
-                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                <div class="relative border-t" style="height: 11%; border-color: #1a2332;">
                     <div ref="kdChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- BIAS Chart -->
-                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                <div class="relative border-t" style="height: 11%; border-color: #1a2332;">
                     <div ref="biasChartContainer" class="absolute inset-0"></div>
                 </div>
                 <!-- MACD Chart -->
-                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                <div class="relative border-t" style="height: 11%; border-color: #1a2332;">
                     <div ref="macdChartContainer" class="absolute inset-0"></div>
+                </div>
+                <!-- Volume Chart -->
+                <div class="relative border-t" style="height: 12.5%; border-color: #1a2332;">
+                    <div ref="volumeChartContainer" class="absolute inset-0"></div>
                 </div>
             </div>
             <!-- Error Overlay -->
@@ -278,6 +282,7 @@
                 const kdChartContainer = ref(null);
                 const biasChartContainer = ref(null);
                 const macdChartContainer = ref(null);
+                const volumeChartContainer = ref(null);
                 
                 // Chart instances
                 let mainChart = null, candleSeries = null, maLines = [];
@@ -285,6 +290,7 @@
                 let kdChart = null, kLine = null, dLine = null;
                 let biasChart = null, biasLines = [];
                 let macdChart = null, difLine = null, deaLine = null, histSeries = null;
+                let volumeChart = null, volumeSeries = null;
                 
                 let abortController = null;
 
@@ -369,8 +375,25 @@
                         }
                     });
                     
+                    // Volume chart
+                    volumeChart = LightweightCharts.createChart(volumeChartContainer.value, {
+                        ...chartOptions(),
+                        rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0 } },
+                        timeScale: { 
+                            visible: true, 
+                            timeVisible: true,
+                            borderColor: '#485c7b',
+                            fixRightEdge: true,
+                            rightOffset: 0
+                        }
+                    });
+                    volumeSeries = volumeChart.addHistogramSeries({
+                        priceLineVisible: false,
+                        lastValueVisible: false
+                    });
+                    
                     // Crosshair Sync Logic
-                    const charts = [mainChart, rsiChart, kdChart, biasChart, macdChart];
+                    const charts = [mainChart, rsiChart, kdChart, biasChart, macdChart, volumeChart];
                     
                     charts.forEach(chart => {
                         chart.subscribeCrosshairMove(param => {
@@ -454,7 +477,8 @@
                             [rsiChartContainer, rsiChart],
                             [kdChartContainer, kdChart],
                             [biasChartContainer, biasChart],
-                            [macdChartContainer, macdChart]
+                            [macdChartContainer, macdChart],
+                            [volumeChartContainer, volumeChart]
                         ].forEach(([container, chart]) => {
                             if (container.value && chart) {
                                 chart.applyOptions({ 
@@ -465,7 +489,7 @@
                         });
                     });
                     
-                    [mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer]
+                    [mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer, volumeChartContainer]
                         .forEach(c => { if (c.value) resizeObserver.observe(c.value); });
                 };
 
@@ -516,7 +540,14 @@
                             data.macd.histogram = data.macd.histogram.map((v, i) => ({ 
                                 time: dates[i], value: v, color: v >= 0 ? '#26A69A' : '#EF5350'
                             }));
-                        }
+                            
+                            // Volume data mounting
+                            data.volumes = data.volumes.map((v, i) => ({
+                                time: dates[i],
+                                value: v || 0,
+                                color: data.closes[i] >= data.opens[i] ? '#EF5350' : '#26A69A'
+                            }));
+
                         
                         addLog(`📊 JSON: candles=${data.candles?.length || 0}`);
                         
@@ -602,6 +633,9 @@
                             color: (d.value >= 0) ? '#EF5350' : '#26A69A'
                         })));
                         
+                        // --- Volume Chart ---
+                        volumeSeries.setData(data.volumes);
+                        
                         addLog(`🎨 RENDER: ${(performance.now() - renderStart).toFixed(0)}ms`, 'log-success');
                         
                         // Debug Memory if available
@@ -669,7 +703,7 @@
 
                 return { 
                     isSidebarOpen, currentMarket, currentStock, filteredStocks, selectStock, 
-                    chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer,
+                    chartsScrollContainer, mainChartContainer, rsiChartContainer, kdChartContainer, biasChartContainer, macdChartContainer, volumeChartContainer,
                     loading, error, showDebug, debugLogs, debugPanel,
                     currentCandle, currentMAs, priceChange, priceChangePercent, formatVolume,
                     maColors: MA_COLORS, maPeriods: MA_PERIODS

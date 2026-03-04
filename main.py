@@ -410,6 +410,7 @@ def refresh_cache():
                 highs = []
                 lows = []
                 closes = []
+                volumes = []
                 
                 for r in rows:
                     date_str = r.date.strftime('%Y-%m-%d')
@@ -422,6 +423,7 @@ def refresh_cache():
                     highs.append(r.high)
                     lows.append(r.low)
                     closes.append(r.close)
+                    volumes.append(r.volume)
                     
                 df = pd.DataFrame({
                     "date": dates,
@@ -458,6 +460,7 @@ def refresh_cache():
                     "symbol": symbol,
                     "dates": dates[-LIMIT:],
                     "opens": opens[-LIMIT:], "highs": highs[-LIMIT:], "lows": lows[-LIMIT:], "closes": closes[-LIMIT:],
+                    "volumes": volumes[-LIMIT:],
                     "ma": ma_values,
                     "rsi": rsi_values,
                     "kd": {"k": k_values, "d": d_values},
@@ -1210,6 +1213,7 @@ def query_and_calculate(symbol):
         highs = []
         lows = []
         closes = []
+        volumes = []
         
         for r in rows:
             date_str = r.date.strftime('%Y-%m-%d')
@@ -1222,6 +1226,7 @@ def query_and_calculate(symbol):
             highs.append(r.high)
             lows.append(r.low)
             closes.append(r.close)
+            volumes.append(r.volume)
             
         df = pd.DataFrame({
             "date": dates,
@@ -1242,6 +1247,7 @@ def query_and_calculate(symbol):
         highs = highs[-LIMIT:]
         lows = lows[-LIMIT:]
         closes = closes[-LIMIT:]
+        volumes = volumes[-LIMIT:]
         
         # Optimize structure
         ma_values = []
@@ -1267,6 +1273,7 @@ def query_and_calculate(symbol):
             "symbol": symbol,
             "dates": dates,
             "opens": opens, "highs": highs, "lows": lows, "closes": closes,
+            "volumes": volumes,
             "ma": ma_values,
             "rsi": rsi_values,
             "kd": {"k": k_values, "d": d_values},
