@@ -395,6 +395,7 @@ def update_database():
 def refresh_cache():
     """Load stock data from DB into memory cache one by one to avoid OOM"""
     print(">>> Refreshing memory cache...")
+    LIMIT = 500  # Define LIMIT here as well
     db = SessionLocal()
     try:
         # Get list of unique symbols first
