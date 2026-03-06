@@ -143,6 +143,13 @@ def update_stock(stock):
     latest_date = get_db_latest_date(symbol)
     today = date.today()
     
+    # 檢查是否連續 3 天沒有新資料
+    stale_warning = None
+    if latest_date:
+        days_since_update = (today - latest_date).days
+        if days_since_update >= 3:
+            stale_warning = f"⚠️ {symbol}: 已連續 {days_since_update} 天無新資料 (最後: {latest_date})"
+    
     if latest_date:
         # 從最後日期的下一天開始
         start_date = (latest_date + timedelta(days=1)).strftime('%Y-%m-%d')
@@ -155,7 +162,10 @@ def update_stock(stock):
     # 如果已是最新，跳過
     if start_date > end_date:
         print(f"📈 {symbol} ({name}): ✅ 已是最新 ({latest_date})")
-        return 0
+        return {"inserted": 0, "warning": stale_warning, "date_from": str(latest_date) if latest_date else None, "date_to": str(latest_date) if latest_date else None}
+    
+    # 記錄更新前日期
+    date_before = str(latest_date) if latest_date else "N/A"
     
     print(f"📈 {symbol} ({name}): {start_date} ~ {end_date}", end="", flush=True)
     
@@ -163,10 +173,10 @@ def update_stock(stock):
     data = fetch_finmind_data(symbol, data_id, dataset, start_date, end_date)
     if data is None:
         print(" ❌ API 錯誤")
-        return 0
+        return {"inserted": 0, "warning": stale_warning, "date_from": date_before, "date_to": date_before}
     if not data:
         print(" ✅ 無新資料")
-        return 0
+        return {"inserted": 0, "warning": stale_warning, "date_from": date_before, "date_to": date_before}
     
     # 解析並儲存
     records = []
@@ -178,11 +188,12 @@ def update_stock(stock):
     if records:
         inserted = save_to_db(records)
         new_latest = get_db_latest_date(symbol)
+        date_after = str(new_latest) if new_latest else date_before
         print(f" ✅ 新增 {inserted} 筆 (最新: {new_latest})")
-        return inserted
+        return {"inserted": inserted, "warning": stale_warning, "date_from": date_before, "date_to": date_after}
     else:
         print(" ⚠️ 無有效資料")
-        return 0
+        return {"inserted": 0, "warning": stale_warning, "date_from": date_before, "date_to": date_before}
 
 def main():
     print("=" * 60)
