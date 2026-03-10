@@ -206,10 +206,19 @@ def main():
     
     for i, stock in enumerate(STOCK_LIST, 1):
         print(f"\n[{i}/{len(STOCK_LIST)}] ", end="")
-        count = update_stock(stock)
+        result = update_stock(stock)
+        
+        # 處理回傳的 dict (包含 inserted, warning 等資訊)
+        count = result.get("inserted", 0) if isinstance(result, dict) else (result if isinstance(result, int) else 0)
+        warning = result.get("warning") if isinstance(result, dict) else None
+        
         if count > 0:
             total_inserted += count
             stocks_updated += 1
+            
+        if warning:
+            print(f"\n{warning}")
+            
         time.sleep(1)  # API 友善間隔
     
     print("\n" + "=" * 60)
